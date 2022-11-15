@@ -1346,7 +1346,7 @@ a.sparkline {
 
 .account-card {
   background: $ui-base-color;
-  border-radius: 4px;
+  border-radius: 16px;
 
   &__permalink {
     color: inherit;
@@ -1354,9 +1354,9 @@ a.sparkline {
   }
 
   &__header {
-    padding: 4px;
-    border-radius: 4px;
+    border-radius: 16px 16px 0 0;
     height: 128px;
+    overflow: hidden;
 
     img {
       display: block;
@@ -1369,7 +1369,7 @@ a.sparkline {
   }
 
   &__title {
-    margin-top: -(15px + 8px);
+    margin-top: -(15px + 4px);
     display: flex;
     align-items: flex-end;
 
@@ -1383,7 +1383,7 @@ a.sparkline {
         width: 56px;
         height: 56px;
         background-color: darken($ui-base-color, 8%);
-        border-radius: 8px;
+        border-radius: 50%;
         border: 1px solid $ui-base-color;
       }
     }
