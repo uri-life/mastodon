@@ -436,7 +436,7 @@ code {
     resize: vertical;
     background: darken($ui-base-color, 10%);
     border: 1px solid darken($ui-base-color, 14%);
-    border-radius: 4px;
+    border-radius: 16px;
     padding: 10px;
 
     &::placeholder {
