@@ -49,7 +49,6 @@
 .button {
   background-color: $ui-button-background-color;
   border: 10px none;
-  border-radius: 4px;
   box-sizing: border-box;
   color: $ui-button-color;
   cursor: pointer;
@@ -2239,7 +2238,7 @@ $ui-header-height: 55px;
 
   > .scrollable {
     background: $ui-base-color;
-    border-radius: 0 0 4px 4px;
+    border-radius: 0 0 16px 16px;
   }
 }
 
@@ -3002,6 +3001,7 @@ $ui-header-height: 55px;
   background: lighten($ui-base-color, 13%);
   box-sizing: border-box;
   padding: 0;
+  border-radius: 16px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -3105,7 +3105,7 @@ $ui-header-height: 55px;
   box-sizing: border-box;
   width: 100%;
   background: $ui-base-color;
-  border-radius: 4px 4px 0 0;
+  border-radius: 16px 16px 0 0;
   color: $highlight-text-color;
   cursor: pointer;
   flex: 0 0 auto;
@@ -3463,7 +3463,7 @@ $ui-header-height: 55px;
   font-family: inherit;
   font-size: 14px;
   line-height: 22px;
-  border-radius: 4px;
+  border-radius: 16px;
   border: 1px solid $white;
 
   &:focus {
@@ -3905,7 +3905,7 @@ a.status-card {
   font-size: 16px;
   background: $ui-base-color;
   border-bottom: 1px solid lighten($ui-base-color, 8%);
-  border-radius: 4px 4px 0 0;
+  border-radius: 16px 16px 0 0;
   flex: 0 0 auto;
   cursor: pointer;
   position: relative;
@@ -3970,7 +3970,7 @@ a.status-card {
   padding: 0 15px;
 
   &:last-child {
-    border-start-end-radius: 4px;
+    border-start-end-radius: 16px;
   }
 
   &:hover {
@@ -7484,7 +7484,7 @@ noscript {
 
       .icon-button {
         border: 1px solid lighten($ui-base-color, 12%);
-        border-radius: 4px;
+        border-radius: 16px;
         box-sizing: content-box;
         padding: 2px;
       }
@@ -8412,7 +8412,7 @@ noscript {
 
   &__hero {
     display: block;
-    border-radius: 4px;
+    border-radius: 16px;
     width: 100%;
     height: auto;
     margin-bottom: 20px;
@@ -9036,7 +9036,7 @@ noscript {
   padding: 20px;
 
   @media screen and (min-width: $no-gap-breakpoint) {
-    border-radius: 4px;
+    border-radius: 16px;
   }
 
   &__footer {
@@ -9081,7 +9081,7 @@ noscript {
 
   &__meta {
     background: lighten($ui-base-color, 4%);
-    border-radius: 4px;
+    border-radius: 16px;
     display: flex;
     margin-bottom: 30px;
     font-size: 15px;
@@ -9200,14 +9200,14 @@ noscript {
       font-weight: 600;
       line-height: 22px;
       padding: 20px;
-      border-radius: 4px;
+      border-radius: 16px;
       background: lighten($ui-base-color, 4%);
       color: $highlight-text-color;
       cursor: pointer;
     }
 
     &.active &__title {
-      border-radius: 4px 4px 0 0;
+      border-radius: 16px 16px 0 0;
     }
 
     &__body {
