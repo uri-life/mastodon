@@ -98,3 +98,11 @@ RUN OTP_SECRET=precompile_placeholder SECRET_KEY_BASE=precompile_placeholder rai
 # Set the work dir and the container entry point
 ENTRYPOINT ["/usr/bin/tini", "--"]
 EXPOSE 3000 4000
+
+# Set environment variables
+ARG GITHUB_REPOSITORY=mastodon/mastodon
+ENV GITHUB_REPOSITORY=$GITHUB_REPOSITORY
+ARG SOURCE_BASE_URL=https://github.com/$GITHUB_REPOSITORY
+ENV SOURCE_BASE_URL=$SOURCE_BASE_URL
+ARG SOURCE_TAG
+ENV SOURCE_TAG=$SOURCE_TAG
