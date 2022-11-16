@@ -52,3 +52,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            GITHUB_REPOSITORY=${{ github.repository }}
+            SOURCE_TAG=${{ github.ref_name }}
