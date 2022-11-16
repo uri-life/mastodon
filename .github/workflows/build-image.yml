@@ -32,7 +32,7 @@ jobs:
           flavor: |
             latest=auto
           tags: |
-            type=edge,branch=main
+            type=edge,branch=uri
             type=semver,pattern={{raw}}
             type=ref,event=tag
       - uses: docker/build-push-action@v3
