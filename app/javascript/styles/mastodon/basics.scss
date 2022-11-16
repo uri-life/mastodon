@@ -151,6 +151,14 @@ body {
       }
     }
   }
+
+  :lang(ko) {
+    font-feature-settings: "kern", "ss05";
+  }
+
+  :not(:lang(ko)) {
+    font-feature-settings: "kern";
+  }
 }
 
 button {
@@ -256,10 +264,6 @@ button {
       color: $valid-value-color;
       transition: none;
     }
-  }
-
-  :lang(ko) {
-    font-feature-settings: "kern", "ss05";
   }
 }
 
