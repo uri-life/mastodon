@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - 'main'
+      - uri
     tags:
-      - '*'
+      - '*\+uri*'
   pull_request:
     paths:
       - .github/workflows/build-image.yml
@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   build-image:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     concurrency:
       group: ${{ github.ref }}
@@ -34,18 +34,18 @@ jobs:
       - uses: docker/metadata-action@v4
         id: meta
         with:
-          images: tootsuite/mastodon
+          images: urilife/mastodon
           flavor: |
             latest=auto
           tags: |
-            type=edge,branch=main
-            type=pep440,pattern={{raw}}
-            type=pep440,pattern=v{{major}}.{{minor}}
-            type=ref,event=pr
+            type=edge,branch=uri
+            type=match,pattern=^v\d+\.\d+\.\d+(?:rc\d+)?\+uri
+            type=match,pattern=^v\d+\.\d+\.\d+(?:rc\d+)?\+uri\d+
+            type=ref,event=tag
       - uses: docker/build-push-action@v4
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           provenance: false
           builder: ${{ steps.buildx.outputs.name }}
           push: ${{ github.event_name != 'pull_request' }}
