@@ -21,7 +21,11 @@ module Mastodon
     end
 
     def suffix
-      ''
+      if (m = /^v\d+\.\d+\.\d+(?:rc\d+)?(\+uri\d+\.\d+)/.match(source_tag))
+        m[1]
+      else
+        ''
+      end
     end
 
     def to_a
