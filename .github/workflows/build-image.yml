@@ -43,3 +43,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=registry,ref=urilife/mastodon:edge
           cache-to: type=inline
+          build-args: |
+            GITHUB_REPOSITORY=${{ github.repository }}
+            SOURCE_TAG=${{ github.ref_name }}
