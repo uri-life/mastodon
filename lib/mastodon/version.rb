@@ -25,7 +25,11 @@ module Mastodon
     end
 
     def build_metadata
-      ENV.fetch('MASTODON_VERSION_METADATA', nil)
+      if (m = /^v\d+\.\d+\.\d+(?:rc\d+)?\+(uri\d+\.\d+)/.match(source_tag))
+        m[1]
+      else
+        ENV.fetch('MASTODON_VERSION_METADATA', nil)
+      end
     end
 
     def to_a
