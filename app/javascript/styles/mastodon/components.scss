@@ -2880,7 +2880,7 @@ $ui-header-height: 55px;
   box-sizing: border-box;
   width: 100%;
   background: lighten($ui-base-color, 4%);
-  border-radius: 4px 4px 0 0;
+  border-radius: 16px 16px 0 0;
   color: $highlight-text-color;
   cursor: pointer;
   flex: 0 0 auto;
@@ -7050,7 +7050,7 @@ noscript {
 
       .icon-button {
         border: 1px solid lighten($ui-base-color, 12%);
-        border-radius: 4px;
+        border-radius: 16px;
         box-sizing: content-box;
         padding: 2px;
       }
@@ -8429,7 +8429,7 @@ noscript {
 
   &__meta {
     background: lighten($ui-base-color, 4%);
-    border-radius: 4px;
+    border-radius: 16px;
     display: flex;
     margin-bottom: 30px;
     font-size: 15px;
