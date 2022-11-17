@@ -41,8 +41,8 @@ RSpec.describe EmojiFormatter do
     context 'when given text with concatenated emoji shortcodes' do
       let(:text) { preformat_text(':coolcat::coolcat:') }
 
-      it 'does not touch the shortcodes' do
-        expect(subject).to match(/:coolcat::coolcat:/)
+      it 'converts the shortcodes to image tags' do
+        expect(subject).to match(/<img rel="emoji" draggable="false" width="16" height="16" class="emojione custom-emoji" alt=":coolcat:"[^<]+<img rel="emoji" draggable="false" width="16" height="16" class="emojione custom-emoji" alt=":coolcat:"/)
       end
     end
 
