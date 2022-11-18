@@ -8634,14 +8634,14 @@ noscript {
       font-weight: 600;
       line-height: 22px;
       padding: 20px;
-      border-radius: 4px;
+      border-radius: 16px;
       background: lighten($ui-base-color, 4%);
       color: $highlight-text-color;
       cursor: pointer;
     }
 
     &.active &__title {
-      border-radius: 4px 4px 0 0;
+      border-radius: 16px 16px 0 0;
     }
 
     &__body {
