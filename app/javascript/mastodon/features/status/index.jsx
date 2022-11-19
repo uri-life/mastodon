@@ -571,6 +571,7 @@ class Status extends ImmutablePureComponent {
         previousId={i > 0 ? list.get(i - 1) : undefined}
         nextId={list.get(i + 1) || (ancestors && statusId)}
         rootId={statusId}
+        withCounters
       />
     ));
   }
