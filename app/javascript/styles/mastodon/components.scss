@@ -1,3 +1,5 @@
+$no-columns-breakpoint: 600px;
+
 .app-body {
   -webkit-overflow-scrolling: touch;
   -ms-overflow-style: -ms-autohiding-scrollbar;
@@ -1228,13 +1230,17 @@
   align-items: center;
   gap: 18px;
   margin-top: 16px;
+
+  @media screen and (max-width: $no-columns-breakpoint) {
+    gap: 11px;
+  }
+
+  &__button:nth-child(n+1):nth-child(-n+3) {
+    flex-grow: 2;
+  }
 }
 
 .detailed-status__action-bar-dropdown {
-  flex: 1 1 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   position: relative;
 }
 
@@ -1290,7 +1296,18 @@
   border-bottom: 1px solid lighten($ui-base-color, 8%);
   display: flex;
   flex-direction: row;
-  padding: 10px 0;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 16px;
+
+  @media screen and (max-width: $no-columns-breakpoint) {
+    gap: 11px;
+  }
+
+  .detailed-status__button:nth-child(n+1):nth-child(-n+3) {
+    flex-grow: 2;
+  }
 }
 
 .detailed-status__link {
@@ -3988,8 +4005,7 @@ a.status-card.compact:hover {
   padding: 10px 0;
 }
 
-.account--panel__button,
-.detailed-status__button {
+.account--panel__button {
   flex: 1 1 auto;
   text-align: center;
 }
