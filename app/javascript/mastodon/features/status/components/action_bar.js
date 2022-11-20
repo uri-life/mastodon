@@ -257,8 +257,8 @@ class ActionBar extends React.PureComponent {
       }
     }
 
-    const shareButton = ('share' in navigator) && publicStatus && (
-      <div className='detailed-status__button'><IconButton title={intl.formatMessage(messages.share)} icon='share-alt' onClick={this.handleShare} /></div>
+    const shareButton = ('share' in navigator) && (
+      <div className='detailed-status__button'><IconButton className='share-icon' hidden={!publicStatus} title={intl.formatMessage(messages.share)} icon='share-alt' onClick={this.handleShare} /></div>
     );
 
     let replyIcon;
