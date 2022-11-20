@@ -349,8 +349,8 @@ class StatusActionBar extends ImmutablePureComponent {
       reblogTitle = intl.formatMessage(messages.cannot_reblog);
     }
 
-    const shareButton = ('share' in navigator) && publicStatus && (
-      <IconButton className='status__action-bar__button' title={intl.formatMessage(messages.share)} icon='share-alt' onClick={this.handleShareClick} />
+    const shareButton = ('share' in navigator) && (
+      <IconButton className='status__action-bar__button share-icon' hidden={!publicStatus} title={intl.formatMessage(messages.share)} icon='share-alt' onClick={this.handleShareClick} />
     );
 
     const filterButton = this.props.onFilter && (

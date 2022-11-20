@@ -28,6 +28,7 @@ export default class IconButton extends React.PureComponent {
     obfuscateCount: PropTypes.bool,
     href: PropTypes.string,
     ariaHidden: PropTypes.bool,
+    hidden: PropTypes.bool,
   };
 
   static defaultProps = {
@@ -38,6 +39,7 @@ export default class IconButton extends React.PureComponent {
     overlay: false,
     tabIndex: '0',
     ariaHidden: false,
+    hidden: false,
   };
 
   state = {
@@ -105,6 +107,7 @@ export default class IconButton extends React.PureComponent {
       obfuscateCount,
       href,
       ariaHidden,
+      hidden,
     } = this.props;
 
     const {
@@ -118,6 +121,7 @@ export default class IconButton extends React.PureComponent {
       inverted,
       activate,
       deactivate,
+      hidden,
       overlayed: overlay,
       'icon-button--with-counter': typeof counter !== 'undefined',
     });
@@ -155,6 +159,7 @@ export default class IconButton extends React.PureComponent {
         style={style}
         tabIndex={tabIndex}
         disabled={disabled}
+        hidden={hidden}
       >
         {contents}
       </button>
