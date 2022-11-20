@@ -40,6 +40,7 @@ export class IconButton extends PureComponent<Props, States> {
     overlay: false,
     tabIndex: 0,
     ariaHidden: false,
+    hidden: false,
   };
 
   state = {
@@ -106,6 +107,7 @@ export class IconButton extends PureComponent<Props, States> {
       counter,
       href,
       ariaHidden,
+      hidden,
     } = this.props;
 
     const { activate, deactivate } = this.state;
@@ -116,6 +118,7 @@ export class IconButton extends PureComponent<Props, States> {
       inverted,
       activate,
       deactivate,
+      hidden,
       overlayed: overlay,
       'icon-button--with-counter': typeof counter !== 'undefined',
     });
@@ -158,6 +161,7 @@ export class IconButton extends PureComponent<Props, States> {
         style={style}
         tabIndex={tabIndex}
         disabled={disabled}
+        hidden={hidden}
       >
         {contents}
       </button>
