@@ -27,6 +27,7 @@ export default class IconButton extends React.PureComponent {
     counter: PropTypes.number,
     obfuscateCount: PropTypes.bool,
     href: PropTypes.string,
+    hidden: PropTypes.bool,
   };
 
   static defaultProps = {
@@ -36,6 +37,7 @@ export default class IconButton extends React.PureComponent {
     animate: false,
     overlay: false,
     tabIndex: '0',
+    hidden: false,
   };
 
   state = {
@@ -102,6 +104,7 @@ export default class IconButton extends React.PureComponent {
       counter,
       obfuscateCount,
       href,
+      hidden,
     } = this.props;
 
     const {
@@ -115,6 +118,7 @@ export default class IconButton extends React.PureComponent {
       inverted,
       activate,
       deactivate,
+      hidden,
       overlayed: overlay,
       'icon-button--with-counter': typeof counter !== 'undefined',
     });
@@ -151,6 +155,7 @@ export default class IconButton extends React.PureComponent {
         style={style}
         tabIndex={tabIndex}
         disabled={disabled}
+        hidden={hidden}
       >
         {contents}
       </button>
