@@ -6534,8 +6534,36 @@ a.status-card.compact:hover {
   }
 }
 
-::-webkit-scrollbar-thumb {
+::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+
+::-webkit-scrollbar-track {
+  background: inherit;
   border-radius: 0;
+
+  &:active,
+  &:hover {
+    background: inherit;
+  }
+}
+
+::-webkit-scrollbar-thumb {
+  &,
+  &:active,
+  &:hover {
+    border-radius: 0;
+    background-clip: content-box;
+
+    &:horizontal {
+      border-top: 4px solid transparent;
+    }
+
+    &:vertical {
+      border-left: 4px solid transparent;
+    }
+  }
 }
 
 .search-popout {
