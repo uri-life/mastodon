@@ -41,8 +41,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=registry,ref=urilife/mastodon:edge
-          cache-to: type=inline
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           build-args: |
             GITHUB_REPOSITORY=${{ github.repository }}
             SOURCE_TAG=${{ github.ref_name }}
