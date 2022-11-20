@@ -1775,6 +1775,10 @@ a.account__display-name {
   color: $red-bookmark;
 }
 
+.icon-button.share-icon.hidden {
+  visibility: hidden;
+}
+
 .no-reduce-motion .icon-button.star-icon {
   &.activate {
     & > .fa-star {
