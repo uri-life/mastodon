@@ -6572,10 +6572,12 @@ a.status-card.compact:hover {
     border-radius: 0;
     background-clip: content-box;
 
+    // stylelint-disable-next-line selector-pseudo-class-no-unknown
     &:horizontal {
       border-top: 4px solid transparent;
     }
 
+    // stylelint-disable-next-line selector-pseudo-class-no-unknown
     &:vertical {
       border-left: 4px solid transparent;
     }
