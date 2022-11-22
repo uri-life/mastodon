@@ -310,7 +310,7 @@ class Status extends ImmutablePureComponent {
 
   render () {
     let media = null;
-    let statusAvatar, prepend, rebloggedByText;
+    let languageCode, statusAvatar, prepend, rebloggedByText;
 
     const { intl, hidden, featured, unread, showThread, scrollKey, pictureInPicture } = this.props;
 
@@ -504,6 +504,25 @@ class Status extends ImmutablePureComponent {
 
     const visibilityIcon = visibilityIconInfo[status.get('visibility')];
 
+    const language = status.get('language');
+    if (language !== undefined && language !== null && Intl !== undefined) {
+      try {
+        languageCode = (
+          <span className='status__language-code' aria-hidden='true'>
+            {new Intl.DisplayNames([intl.locale], { type: 'language' }).of(language)}
+          </span>
+        );
+      } catch {
+        languageCode = (
+          <span className='status__language-code' aria-hidden='true'>
+            {language}
+          </span>
+        );
+      }
+    } else {
+      languageCode = null;
+    }
+
     return (
       <HotKeys handlers={handlers}>
         <div className={classNames('status__wrapper', `status__wrapper-${status.get('visibility')}`, { 'status__wrapper-reply': !!status.get('in_reply_to_id'), unread, focusable: !this.props.muted })} tabIndex={this.props.muted ? null : 0} data-featured={featured ? 'true' : null} aria-label={textForScreenReader(intl, status, rebloggedByText)} ref={this.handleRef}>
@@ -514,6 +533,7 @@ class Status extends ImmutablePureComponent {
               <a onClick={this.handleClick} href={`/@${status.getIn(['account', 'acct'])}\/${status.get('id')}`} className='status__relative-time' target='_blank' rel='noopener noreferrer'>
                 <span className='status__visibility-icon'><Icon id={visibilityIcon.icon} title={visibilityIcon.text} /></span>
                 <RelativeTimestamp timestamp={status.get('created_at')} />{status.get('edited_at') && <abbr title={intl.formatMessage(messages.edited, { date: intl.formatDate(status.get('edited_at'), { hour12: false, year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' }) })}> *</abbr>}
+                {languageCode}
               </a>
 
               <a onClick={this.handleAccountClick} href={`/@${status.getIn(['account', 'acct'])}`} title={status.getIn(['account', 'acct'])} className='status__display-name' target='_blank' rel='noopener noreferrer'>
