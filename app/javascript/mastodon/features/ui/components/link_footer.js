@@ -80,6 +80,12 @@ class LinkFooter extends React.PureComponent {
           )}
           {DividingCircle}
           <Link to='/privacy-policy'><FormattedMessage id='footer.privacy_policy' defaultMessage='Privacy policy' /></Link>
+          {signedIn && (
+            <>
+              {' · '}
+              <Link to='/auth/sign_out' onClick={this.handleLogoutClick}><FormattedMessage id='navigation_bar.logout' defaultMessage='Logout' /></Link>
+            </>
+          )}
         </p>
 
         <p>
