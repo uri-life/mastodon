@@ -2,10 +2,8 @@ name: Build container image
 on:
   workflow_dispatch:
   push:
-    branches:
-      - 'main'
     tags:
-      - '*'
+      - '*+uri*'
   pull_request:
     paths:
       - .github/workflows/build-image.yml
