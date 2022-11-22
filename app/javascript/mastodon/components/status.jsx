@@ -368,6 +368,7 @@ class Status extends ImmutablePureComponent {
     };
 
     let media, statusAvatar, prepend, rebloggedByText;
+    let languageCode;
 
     if (hidden) {
       return (
@@ -547,6 +548,24 @@ class Status extends ImmutablePureComponent {
 
     const {statusContentProps, hashtagBar} = getHashtagBarForStatus(status);
     const expanded = !status.get('hidden') || status.get('spoiler_text').length === 0;
+    const language = status.get('language');
+    if (language !== undefined && language !== null && Intl !== undefined) {
+      try {
+        languageCode = (
+          <span className='status__language-code' aria-hidden='true'>
+            {new Intl.DisplayNames([intl.locale], { type: 'language' }).of(language)}
+          </span>
+        );
+      } catch {
+        languageCode = (
+          <span className='status__language-code' aria-hidden='true'>
+            {language}
+          </span>
+        );
+      }
+    } else {
+      languageCode = null;
+    }
 
     return (
       <HotKeys handlers={handlers}>
@@ -561,6 +580,7 @@ class Status extends ImmutablePureComponent {
               <a href={`/@${status.getIn(['account', 'acct'])}/${status.get('id')}`} className='status__relative-time' target='_blank' rel='noopener noreferrer'>
                 <span className='status__visibility-icon'><Icon id={visibilityIcon.icon} title={visibilityIcon.text} /></span>
                 <RelativeTimestamp timestamp={status.get('created_at')} />{status.get('edited_at') && <abbr title={intl.formatMessage(messages.edited, { date: intl.formatDate(status.get('edited_at'), { hour12: false, year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' }) })}> *</abbr>}
+                {languageCode}
               </a>
 
               <a onClick={this.handleAccountClick} href={`/@${status.getIn(['account', 'acct'])}`} title={status.getIn(['account', 'acct'])} className='status__display-name' target='_blank' rel='noopener noreferrer'>
