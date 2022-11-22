@@ -72,6 +72,12 @@ class LinkFooter extends React.PureComponent {
           )}
           {' · '}
           <Link key='privacy-policy' to='/privacy-policy'><FormattedMessage id='footer.privacy_policy' defaultMessage='Privacy policy' /></Link>
+          {signedIn && (
+            <>
+              {' · '}
+              <Link key='logout' to='/auth/sign_out' onClick={this.handleLogoutClick}><FormattedMessage id='navigation_bar.logout' defaultMessage='Logout' /></Link>
+            </>
+          )}
         </p>
 
         <p>
