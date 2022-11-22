@@ -1307,6 +1307,13 @@ $no-columns-breakpoint: 600px;
 
   .detailed-status__button:nth-child(n+1):nth-child(-n+3) {
     flex-grow: 2;
+
+    > * {
+      display: inline-flex;
+      align-items: center;
+      width: auto !important;
+      padding: 0 4px 0 2px;
+    }
   }
 }
 
