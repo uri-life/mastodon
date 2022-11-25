@@ -4775,6 +4775,10 @@ a.status-card.compact:hover {
 .search {
   margin-bottom: 10px;
   position: relative;
+
+  @media screen and (min-width: 631px) {
+    margin-bottom: 10px;
+  }
 }
 
 .search__input {
