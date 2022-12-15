@@ -506,11 +506,19 @@ class Status extends ImmutablePureComponent {
 
     const language = status.get('language');
     if (language !== undefined && language !== null && Intl !== undefined) {
-      languageCode = (
-        <span className='status__language-code' aria-hidden='true'>
-          {new Intl.DisplayNames([intl.locale], { type: 'language' }).of(language)}
-        </span>
-      );
+      try {
+        languageCode = (
+          <span className='status__language-code' aria-hidden='true'>
+            {new Intl.DisplayNames([intl.locale], { type: 'language' }).of(language)}
+          </span>
+        );
+      } catch {
+        languageCode = (
+          <span className='status__language-code' aria-hidden='true'>
+            {language}
+          </span>
+        );
+      }
     } else {
       languageCode = null;
     }
