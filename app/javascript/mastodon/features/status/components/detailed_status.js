@@ -262,12 +262,21 @@ class DetailedStatus extends ImmutablePureComponent {
 
     const language = status.get('language');
     if (language !== undefined && language !== null && Intl) {
-      languageCode = (
-        <React.Fragment>
-          <React.Fragment> · </React.Fragment>
-          <React.Fragment>{new Intl.DisplayNames([intl.locale], { type: 'language' }).of(language)}</React.Fragment>
-        </React.Fragment>
-      );
+      try {
+        languageCode = (
+          <React.Fragment>
+            <React.Fragment> · </React.Fragment>
+            <React.Fragment>{new Intl.DisplayNames([intl.locale], { type: 'language' }).of(language)}</React.Fragment>
+          </React.Fragment>
+        );
+      } catch {
+        languageCode = (
+          <React.Fragment>
+            <React.Fragment> · </React.Fragment>
+            <React.Fragment>{language}</React.Fragment>
+          </React.Fragment>
+        );
+      }
     }
 
     replies = (
