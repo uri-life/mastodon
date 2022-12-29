@@ -2505,7 +2505,8 @@ $ui-header-height: 55px;
     height: calc(100% - 10px) !important;
   }
 
-  .getting-started__wrapper {
+  .getting-started__wrapper,
+  .search {
     margin-bottom: 10px;
   }
 
@@ -4700,10 +4701,6 @@ a.status-card.compact:hover {
 
 .search {
   position: relative;
-
-  @media screen and (min-width: 631px) {
-    margin-bottom: 10px;
-  }
 }
 
 .search__input {
