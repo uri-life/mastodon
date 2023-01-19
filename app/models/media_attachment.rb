@@ -91,7 +91,7 @@ class MediaAttachment < ApplicationRecord
   }.freeze
 
   VIDEO_FORMAT = {
-    format: 'mp4',
+    format: 'm4v',
     content_type: 'video/mp4',
     vfr_frame_rate_threshold: MAX_VIDEO_FRAME_RATE,
     convert_options: {
@@ -117,7 +117,7 @@ class MediaAttachment < ApplicationRecord
     audio_codecs: ['aac', nil].freeze,
     colorspaces: ['yuv420p'].freeze,
     options: {
-      format: 'mp4',
+      format: 'm4v',
       convert_options: {
         output: {
           'loglevel' => 'fatal',
@@ -148,8 +148,8 @@ class MediaAttachment < ApplicationRecord
 
   AUDIO_STYLES = {
     original: {
-      format: 'mp3',
-      content_type: 'audio/mpeg',
+      format: 'm4a',
+      content_type: 'audio/mp4',
       convert_options: {
         output: {
           'loglevel' => 'fatal',
