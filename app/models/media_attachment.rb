@@ -36,12 +36,12 @@ class MediaAttachment < ApplicationRecord
   enum type: [:image, :gifv, :video, :unknown, :audio]
   enum processing: [:queued, :in_progress, :complete, :failed], _prefix: true
 
-  MAX_DESCRIPTION_LENGTH = 1_500
+  MAX_DESCRIPTION_LENGTH = 2_000
 
-  IMAGE_LIMIT = 10.megabytes
-  VIDEO_LIMIT = 40.megabytes
+  IMAGE_LIMIT = 20.megabytes
+  VIDEO_LIMIT = 80.megabytes
 
-  MAX_VIDEO_MATRIX_LIMIT = 2_304_000 # 1920x1200px
+  MAX_VIDEO_MATRIX_LIMIT = 4_096_000 # 2560x1600px
   MAX_VIDEO_FRAME_RATE   = 60
 
   IMAGE_FILE_EXTENSIONS = %w(.jpg .jpeg .png .gif .webp .heic .heif .avif).freeze
@@ -68,12 +68,12 @@ class MediaAttachment < ApplicationRecord
 
   IMAGE_STYLES = {
     original: {
-      pixels: 2_073_600, # 1920x1080px
+      pixels: 4_096_000, # 2560x1600px
       file_geometry_parser: FastGeometryParser,
     }.freeze,
 
     small: {
-      pixels: 230_400, # 640x360px
+      pixels: 400_000, # 800x500px
       file_geometry_parser: FastGeometryParser,
       blurhash: BLURHASH_OPTIONS,
     }.freeze,
@@ -91,7 +91,7 @@ class MediaAttachment < ApplicationRecord
   }.freeze
 
   VIDEO_FORMAT = {
-    format: 'mp4',
+    format: 'm4v',
     content_type: 'video/mp4',
     vfr_frame_rate_threshold: MAX_VIDEO_FRAME_RATE,
     convert_options: {
@@ -116,7 +116,7 @@ class MediaAttachment < ApplicationRecord
     audio_codecs: ['aac', nil].freeze,
     colorspaces: ['yuv420p'].freeze,
     options: {
-      format: 'mp4',
+      format: 'm4v',
       convert_options: {
         output: {
           'loglevel' => 'fatal',
@@ -133,7 +133,7 @@ class MediaAttachment < ApplicationRecord
       convert_options: {
         output: {
           'loglevel' => 'fatal',
-          vf: 'scale=\'min(400\, iw):min(400\, ih)\':force_original_aspect_ratio=decrease',
+          vf: 'scale=\'min(480\, iw):min(480\, ih)\':force_original_aspect_ratio=decrease',
         }.freeze,
       }.freeze,
       format: 'png',
@@ -147,8 +147,8 @@ class MediaAttachment < ApplicationRecord
 
   AUDIO_STYLES = {
     original: {
-      format: 'mp3',
-      content_type: 'audio/mpeg',
+      format: 'm4a',
+      content_type: 'audio/mp4',
       convert_options: {
         output: {
           'loglevel' => 'fatal',
