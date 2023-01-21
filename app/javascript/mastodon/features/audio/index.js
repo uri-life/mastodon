@@ -336,11 +336,16 @@ class Audio extends React.PureComponent {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     const context      = new AudioContext();
     const source       = context.createMediaElementSource(this.audio);
+    const gainNode     = context.createGain();
+
+    gainNode.gain.value = this.audio.volume;
 
     this.visualizer.setAudioContext(context, source);
-    source.connect(context.destination);
+    source.connect(gainNode);
+    gainNode.connect(context.destination);
 
     this.audioContext = context;
+    this.gainNode = gainNode;
   }
 
   handleDownload = () => {
@@ -457,6 +462,10 @@ class Audio extends React.PureComponent {
     }
   }
 
+  handleVolumeChange = () => {
+    this.gainNode.gain.value = this.audio.muted ? 0 : this.audio.volume;
+  }
+
   render () {
     const { src, intl, alt, editable, autoPlay, sensitive, blurhash } = this.props;
     const { paused, muted, volume, currentTime, duration, buffer, dragging, revealed } = this.state;
@@ -488,6 +497,7 @@ class Audio extends React.PureComponent {
           onPause={this.handlePause}
           onProgress={this.handleProgress}
           onLoadedData={this.handleLoadedData}
+          onVolumeChange={this.handleVolumeChange}
           crossOrigin='anonymous'
         />}
 
