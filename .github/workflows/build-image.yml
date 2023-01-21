@@ -32,7 +32,8 @@ jobs:
             latest=auto
           tags: |
             type=edge,branch=uri
-            type=semver,pattern={{raw}}
+            type=match,pattern=^v\d+\.\d+\.\d+(?:rc\d+)?\+uri
+            type=match,pattern=^v\d+\.\d+\.\d+(?:rc\d+)?\+uri\d+
             type=ref,event=tag
       - uses: docker/build-push-action@v3
         with:
