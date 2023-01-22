@@ -766,14 +766,14 @@ RSpec.describe Account do
         expect(account).to model_have_error_on_field(:username)
       end
 
-      it 'is invalid if the display name is longer than 30 characters' do
-        account = Fabricate.build(:account, display_name: Faker::Lorem.characters(number: 31))
+      it 'is invalid if the display name is longer than 80 characters' do
+        account = Fabricate.build(:account, display_name: Faker::Lorem.characters(number: 81))
         account.valid?
         expect(account).to model_have_error_on_field(:display_name)
       end
 
-      it 'is invalid if the note is longer than 500 characters' do
-        account = Fabricate.build(:account, note: Faker::Lorem.characters(number: 501))
+      it 'is invalid if the note is longer than 1000 characters' do
+        account = Fabricate.build(:account, note: Faker::Lorem.characters(number: 1001))
         account.valid?
         expect(account).to model_have_error_on_field(:note)
       end
@@ -812,14 +812,14 @@ RSpec.describe Account do
         expect(account).to_not model_have_error_on_field(:username)
       end
 
-      it 'is valid even if the display name is longer than 30 characters' do
-        account = Fabricate.build(:account, domain: 'domain', display_name: Faker::Lorem.characters(number: 31))
+      it 'is valid even if the display name is longer than 80 characters' do
+        account = Fabricate.build(:account, domain: 'domain', display_name: Faker::Lorem.characters(number: 81))
         account.valid?
         expect(account).to_not model_have_error_on_field(:display_name)
       end
 
-      it 'is valid even if the note is longer than 500 characters' do
-        account = Fabricate.build(:account, domain: 'domain', note: Faker::Lorem.characters(number: 501))
+      it 'is valid even if the note is longer than 1000 characters' do
+        account = Fabricate.build(:account, domain: 'domain', note: Faker::Lorem.characters(number: 1001))
         account.valid?
         expect(account).to_not model_have_error_on_field(:note)
       end
