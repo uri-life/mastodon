@@ -116,10 +116,17 @@ class TextFormatter
       account = entity_cache.mention(username, domain)
     end
 
-    return "@#{h(entity[:screen_name])}" if account.nil?
-
-    url = ActivityPub::TagManager.instance.url_for(account)
-    display_username = same_username_hits&.positive? || with_domains? ? account.pretty_acct : account.username
+    if account.nil?
+      if domain == "twitter.com"
+        url = "https://twitter.com/#{username}"
+        display_username = entity[:screen_name]
+      else
+        return "@#{h(entity[:screen_name])}"
+      end
+    else
+      url = ActivityPub::TagManager.instance.url_for(account)
+      display_username = same_username_hits&.positive? || with_domains? ? account.pretty_acct : account.username
+    end
 
     <<~HTML.squish
       <span class="h-card"><a href="#{h(url)}" class="u-url mention">@<span>#{h(display_username)}</span></a></span>

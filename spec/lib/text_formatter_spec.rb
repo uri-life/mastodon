@@ -40,6 +40,15 @@ RSpec.describe TextFormatter do
       end
     end
 
+    context 'given text containing twitter mentions' do
+      let(:preloaded_accounts) { [] }
+      let(:text) { '@twitter@twitter.com' }
+
+      it 'creates a twitter account link' do
+        is_expected.to include '<a href="https://twitter.com/twitter" class="u-url mention">@<span>twitter</span></a></span>'
+      end
+    end
+
     context 'given a stand-alone medium URL' do
       let(:text) { 'https://hackernoon.com/the-power-to-build-communities-a-response-to-mark-zuckerberg-3f2cac9148a4' }
 
