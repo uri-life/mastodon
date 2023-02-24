@@ -12,13 +12,15 @@ class TranslationService
       TranslationService::DeepL.new(ENV.fetch('DEEPL_PLAN', 'free'), ENV['DEEPL_API_KEY'])
     elsif ENV['LIBRE_TRANSLATE_ENDPOINT'].present?
       TranslationService::LibreTranslate.new(ENV['LIBRE_TRANSLATE_ENDPOINT'], ENV['LIBRE_TRANSLATE_API_KEY'])
+    elsif ENV['GOOGLE_TRANSLATE_API_KEY'].present?
+      TranslationService::GoogleTranslateV2.new(ENV['GOOGLE_TRANSLATE_API_KEY'])
     else
       raise NotConfiguredError
     end
   end
 
   def self.configured?
-    ENV['DEEPL_API_KEY'].present? || ENV['LIBRE_TRANSLATE_ENDPOINT'].present?
+    ENV['DEEPL_API_KEY'].present? || ENV['LIBRE_TRANSLATE_ENDPOINT'].present? || ENV['GOOGLE_TRANSLATE_API_KEY'].present?
   end
 
   def translate(_text, _source_language, _target_language)
