@@ -2767,6 +2767,11 @@ bluebird@^3.5.5:
   resolved "https://registry.yarnpkg.com/bluebird/-/bluebird-3.7.2.tgz#9f229c15be272454ffa973ace0dbee79a1b0c36f"
   integrity sha512-XpNj6GDQzdfW+r2Wnn7xiSAd7TM3jzkxGXBGTtWKuSXv1xUV+azxAm8jdWZN06QTQk+2N2XB9jRDkvbmQmcRtg==
 
+blurhash@^2.0.4:
+  version "2.0.4"
+  resolved "https://registry.yarnpkg.com/blurhash/-/blurhash-2.0.4.tgz#60642a823b50acaaf3732ddb6c7dfd721bdfef2a"
+  integrity sha512-r/As72u2FbucLoK5NTegM/GucxJc3d8GvHc4ngo13IO/nt2HU4gONxNLq1XPN6EM/V8Y9URIa7PcSz2RZu553A==
+
 bmp-js@^0.1.0:
   version "0.1.0"
   resolved "https://registry.yarnpkg.com/bmp-js/-/bmp-js-0.1.0.tgz#e05a63f796a6c1ff25f4771ec7adadc148c07233"
@@ -2991,11 +2996,6 @@ builtin-status-codes@^3.0.0:
   version "3.0.0"
   resolved "https://registry.yarnpkg.com/builtin-status-codes/-/builtin-status-codes-3.0.0.tgz#85982878e21b98e1c66425e03d0174788f569ee8"
   integrity sha1-hZgoeOIbmOHGZCXgPQF0eI9Wnug=
-
-buraha@^0.0.1:
-  version "0.0.1"
-  resolved "https://registry.yarnpkg.com/buraha/-/buraha-0.0.1.tgz#5ccb5d81818c39fd7c294b9d2cd02baaf1b318fb"
-  integrity sha512-G563A0mTbzknm2jDaNxfZuNKIdeArs8T+XQN6t+KbmgnOoevXSXhKDkyf8Md/36Jrx99ikwbCag37VGe3myExQ==
 
 bytes@3.0.0:
   version "3.0.0"

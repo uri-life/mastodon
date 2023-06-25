@@ -1,6 +1,6 @@
 // @ts-check
 
-import { render } from 'buraha';
+import { decode } from 'blurhash';
 import React, { useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
 
@@ -40,7 +40,11 @@ function Blurhash({
     if (dummy || !hash) return;
 
     try {
-      render(hash, canvas);
+      const pixels = decode(hash, width, height);
+      const ctx = canvas.getContext('2d');
+      const imageData = new ImageData(pixels, width, height);
+
+      ctx.putImageData(imageData, 0, 0);
     } catch (err) {
       console.error('Blurhash decoding failure', { err, hash });
     }
