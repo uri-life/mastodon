@@ -569,7 +569,7 @@ body > [data-popper-placement] {
   .autosuggest-emoji img {
     display: block;
     margin-inline-end: 8px;
-    width: 16px;
+    width: auto;
     height: 16px;
   }
 
@@ -756,7 +756,7 @@ body > [data-popper-placement] {
   vertical-align: middle;
   object-fit: contain;
   margin: -0.2ex 0.15em 0.2ex;
-  width: 16px;
+  width: auto;
   height: 16px;
 
   img {
@@ -832,7 +832,7 @@ body > [data-popper-placement] {
   }
 
   .emojione {
-    width: 20px;
+    width: auto;
     height: 20px;
     margin: -3px 0 0;
   }
@@ -913,7 +913,7 @@ body > [data-popper-placement] {
   overflow-y: auto;
 
   .emojione {
-    width: 20px;
+    width: auto;
     height: 20px;
     margin: -3px 0 0;
   }
@@ -1341,7 +1341,7 @@ body > [data-popper-placement] {
     line-height: 24px;
 
     .emojione {
-      width: 24px;
+      width: auto;
       height: 24px;
       margin: -1px 0 0;
     }
@@ -4839,7 +4839,7 @@ a.status-card {
     opacity: 0.8;
     display: block;
     margin: 0;
-    width: 22px;
+    width: auto;
     height: 22px;
   }
 
@@ -6211,7 +6211,7 @@ a.status-card {
     line-height: 24px;
 
     .emojione {
-      width: 24px;
+      width: auto;
       height: 24px;
       margin: -1px 0 0;
     }
@@ -7564,7 +7564,7 @@ noscript {
       margin-bottom: 16px;
 
       .emojione {
-        width: 22px;
+        width: auto;
         height: 22px;
       }
 
@@ -8089,13 +8089,13 @@ noscript {
     &__emoji {
       display: block;
       margin: 3px 0;
-      width: 16px;
+      width: auto;
       height: 16px;
 
       img {
         display: block;
         margin: 0;
-        width: 100%;
+        width: auto;
         height: 100%;
         min-width: auto;
         min-height: auto;
