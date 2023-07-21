@@ -1,7 +1,7 @@
 import { Semaphore } from 'async-mutex';
 
 import type { LocaleData } from './global_locale';
-import { isLocaleLoaded, setLocale } from './global_locale';
+import { isLocaleLoaded, setLocale, updateLocale } from './global_locale';
 
 const localeLoadingSemaphore = new Semaphore(1);
 
@@ -26,5 +26,19 @@ export async function loadLocale() {
     )) as LocaleData['messages'];
 
     setLocale({ messages: localeData, locale });
+
+    try {
+      const customLocaleData = (await import(
+        /* webpackMode: "lazy" */
+        /* webpackChunkName: "locale/[request]" */
+        /* webpackInclude: /\.json$/ */
+        /* webpackPreload: true */
+        `mastodon/locales/custom/${locale}.json`
+      )) as LocaleData['messages'];
+
+      updateLocale({ messages: customLocaleData, locale });
+    } catch (error) {
+      console.warn(error);
+    }
   });
 }
