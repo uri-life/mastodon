@@ -21,6 +21,18 @@ export function getLocale(): LocaleData {
   return loadedLocale;
 }
 
+export function updateLocale(locale: LocaleData) {
+  // merge locale into loadedLocale
+  loadedLocale = {
+    ...loadedLocale,
+    ...locale,
+    messages: {
+      ...loadedLocale?.messages,
+      ...locale.messages,
+    },
+  };
+}
+
 export function isLocaleLoaded() {
   return !!loadedLocale;
 }
