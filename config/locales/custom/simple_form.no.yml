@@ -1,0 +1,6 @@
+---
+no:
+  simple_form:
+    hints:
+      defaults:
+        fields: ~
