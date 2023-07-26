@@ -192,6 +192,8 @@ module Mastodon
       end
     end
 
+    config.i18n.fallbacks = [:en]
+
     # config.paths.add File.join('app', 'api'), glob: File.join('**', '*.rb')
     # config.autoload_paths += Dir[Rails.root.join('app', 'api', '*')]
 
