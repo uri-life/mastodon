@@ -1,0 +1,6 @@
+---
+en:
+  simple_form:
+    hints:
+      defaults:
+        fields: You can have up to 8 items displayed as a table on your profile

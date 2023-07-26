@@ -1,0 +1,6 @@
+---
+zh-TW:
+  simple_form:
+    hints:
+      defaults:
+        fields: ~
