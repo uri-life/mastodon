@@ -4,6 +4,7 @@ pipeline {
         stage('Docker') {
             agent {
                 docker {
+                    label 'linux-x86_64'
                     image 'docker:24-cli'
                     args '--privileged -v /var/run/docker.sock:/var/run/docker.sock'
                 }
