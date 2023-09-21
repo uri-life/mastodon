@@ -27,9 +27,11 @@ pipeline {
                         script {
                             if (env.BRANCH_NAME == 'uri') {
                                 env.DOCKER_TAG = 'testing'
+                                env.MASTODON_VERSION_PRERELEASE = 'testing'
                                 env.DOCKER_LATEST = 'false'
                             } else {
                                 env.DOCKER_TAG = env.TAG_NAME.replaceAll('\\+', '-')
+                                env.MASTODON_VERSION_METADATA = env.TAG_NAME.replaceAll('(v(?>[0-9]\\.?){1,3})\\+', '-')
                                 env.DOCKER_LATEST = 'true'
                             }
                             env.GITHUB_REPOSITORY = "${params.URL}"
