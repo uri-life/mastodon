@@ -51,6 +51,7 @@ $no-columns-breakpoint: 600px;
 .button {
   background-color: $ui-button-background-color;
   border: 10px none;
+  border-radius: 16px;
   box-sizing: border-box;
   color: $ui-button-color;
   cursor: pointer;
