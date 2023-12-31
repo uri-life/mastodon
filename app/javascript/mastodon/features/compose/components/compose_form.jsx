@@ -30,6 +30,8 @@ import CharacterCounter from './character_counter';
 
 const allowedAroundShortCode = '><\u0085\u0020\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u202f\u205f\u3000\u2028\u2029\u0009\u000a\u000b\u000c\u000d';
 
+const maxLength = 2024;
+
 const messages = defineMessages({
   placeholder: { id: 'compose_form.placeholder', defaultMessage: 'What is on your mind?' },
   spoiler_placeholder: { id: 'compose_form.spoiler_placeholder', defaultMessage: 'Write your warning here' },
@@ -95,12 +97,17 @@ class ComposeForm extends ImmutablePureComponent {
     return [this.props.spoiler? this.props.spoilerText: '', countableText(this.props.text)].join('');
   };
 
+  getMaxLength = () => {
+    // Create a Date object adjusted by the KST offset for the current time, and take the lower of its UTC year and `maxLength`
+    return Math.min(maxLength, new Date(Date.now() + 32400000).getUTCFullYear());
+  }
+
   canSubmit = () => {
     const { isSubmitting, isChangingUpload, isUploading, anyMedia } = this.props;
     const fulltext = this.getFulltextForCharacterCounting();
     const isOnlyWhitespace = fulltext.length !== 0 && fulltext.trim().length === 0;
 
-    return !(isSubmitting || isUploading || isChangingUpload || length(fulltext) > 2023 || (isOnlyWhitespace && !anyMedia));
+    return !(isSubmitting || isUploading || isChangingUpload || length(fulltext) > this.getMaxLength() || (isOnlyWhitespace && !anyMedia));
   };
 
   handleSubmit = (e) => {
@@ -297,7 +304,7 @@ class ComposeForm extends ImmutablePureComponent {
             </div>
 
             <div className='character-counter__wrapper'>
-              <CharacterCounter max={2023} text={this.getFulltextForCharacterCounting()} />
+              <CharacterCounter max={this.getMaxLength()} text={this.getFulltextForCharacterCounting()} />
             </div>
           </div>
         </div>
