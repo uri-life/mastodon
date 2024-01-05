@@ -29,10 +29,12 @@ pipeline {
                                 env.DOCKER_TAG = 'testing'
                                 env.MASTODON_VERSION_PRERELEASE = 'testing'
                                 env.DOCKER_LATEST = 'false'
+                                env.MASTODON_VERSION_BUILDARG = "MASTODON_VERSION_PRERELEASE=${MASTODON_VERSION_PRERELEASE}"
                             } else {
                                 env.DOCKER_TAG = env.TAG_NAME.replaceAll('\\+', '-')
                                 env.MASTODON_VERSION_METADATA = env.TAG_NAME.replaceAll('(v(?>[0-9]\\.?){1,3})\\+', '-')
                                 env.DOCKER_LATEST = 'true'
+                                env.MASTODON_VERSION_BUILDARG = "MASTODON_VERSION_METADATA=${MASTODON_VERSION_METADATA}"
                             }
                             env.GITHUB_REPOSITORY = "${params.URL}"
                             env.SOURCE_BASE_URL = "https://github.com/uri-life/mastodon" // I'm lazy. Will fix it later
@@ -56,7 +58,7 @@ pipeline {
                         stages {
                             stage('Build platform specific image') {
                                 steps {
-                                    sh "docker build -t $DOCKER_IMAGE:$DOCKER_TAG-${TARGET} --platform linux/${TARGET} --build-arg \"GITHUB_REPOSITORY=${GITHUB_REPOSITORY}\" --build-arg \"SOURCE_BASE_URL=${SOURCE_BASE_URL}\" --build-arg \"SOURCE_TAG=${SOURCE_TAG}\" ."
+                                    sh "docker build -t $DOCKER_IMAGE:$DOCKER_TAG-${TARGET} --platform linux/${TARGET} --build-arg \"GITHUB_REPOSITORY=${GITHUB_REPOSITORY}\" --build-arg \"SOURCE_BASE_URL=${SOURCE_BASE_URL}\" --build-arg \"SOURCE_TAG=${SOURCE_TAG}\" --build-arg \"${MASTODON_VERSION_BUILDARG}\" ."
                                     script {
                                         if (env.DOCKER_LATEST == 'true') {
                                             sh "docker tag $DOCKER_IMAGE:$DOCKER_TAG-${TARGET} $DOCKER_IMAGE:latest-${TARGET}"
