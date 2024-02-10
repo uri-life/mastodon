@@ -12,13 +12,15 @@ class TranslationService
       TranslationService::DeepL.new(ENV.fetch('DEEPL_PLAN', 'free'), ENV['DEEPL_API_KEY'])
     elsif ENV['LIBRE_TRANSLATE_ENDPOINT'].present?
       TranslationService::LibreTranslate.new(ENV['LIBRE_TRANSLATE_ENDPOINT'], ENV['LIBRE_TRANSLATE_API_KEY'])
+    elsif ENV['PAPAGO_API_KEY'].present?
+      TranslationService::Papago.new(ENV['PAPAGO_API_KEY'], ENV['PAPAGO_API_KEY_SECRET'])
     else
       raise NotConfiguredError
     end
   end
 
   def self.configured?
-    ENV['DEEPL_API_KEY'].present? || ENV['LIBRE_TRANSLATE_ENDPOINT'].present?
+    ENV['DEEPL_API_KEY'].present? || ENV['LIBRE_TRANSLATE_ENDPOINT'].present? || ENV['PAPAGO_API_KEY'].present?
   end
 
   def languages
