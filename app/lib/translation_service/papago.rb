@@ -10,10 +10,21 @@ class TranslationService::Papago < TranslationService
     @api_key_secret = api_key_secret
   end
 
-  def translate(text, source_language, target_language)
-    form = { source: source_language.presence, target: target_language, text: text }
-    request(:post, '/nmt/v1/translation', form: form) do |res|
-      transform_response(res.body_with_limit, source_language)
+  def translate(texts, source_language, target_language)
+    texts.map do |text|
+      form = { source: source_language.presence, target: target_language, text: text }
+
+      if text.empty?
+        Translation.new(
+          text: text,
+          detected_source_language: source_language,
+          provider: provider
+        )
+      else
+        request(:post, '/nmt/v1/translation', form: form) do |res|
+          transform_response(res.body_with_limit, source_language)
+        end
+      end
     end
   end
 
@@ -49,11 +60,12 @@ class TranslationService::Papago < TranslationService
         json = Oj.load(res.body_with_limit, mode: :strict)
         raise UnexpectedResponseError unless json.is_a?(Hash)
 
-        error_code = json.dig('error', 'errorCode')
-
-        raise QuotaExceededError if error_code == '400'
-
-        raise TooManyRequestsError
+        case json.dig('error', 'errorCode')
+        when '400'
+          raise QuotaExceededError
+        else
+          raise TooManyRequestsError
+        end
       when 200...300
         yield res
       else
@@ -68,18 +80,19 @@ class TranslationService::Papago < TranslationService
     'https://naveropenapi.apigw.ntruss.com'
   end
 
+  def provider
+    'Papago'
+  end
+
   def transform_response(json, source_language)
     data = Oj.load(json, mode: :strict)
-
     raise UnexpectedResponseError unless data.is_a?(Hash)
 
-    [
-      Translation.new(
-        text: Sanitize.fragment(data.dig('message', 'result', 'translatedText'), Sanitize::Config::MASTODON_STRICT),
-        detected_source_language: data.dig('message', 'result', 'srcLangType') || source_language,
-        provider: 'Papago'
-      ),
-    ]
+    Translation.new(
+      text: Sanitize.fragment(data.dig('message', 'result', 'translatedText'), Sanitize::Config::MASTODON_STRICT),
+      detected_source_language: data.dig('message', 'result', 'srcLangType') || source_language,
+      provider: 'Papago'
+    )
   rescue Oj::ParseError
     raise UnexpectedResponseError
   end
