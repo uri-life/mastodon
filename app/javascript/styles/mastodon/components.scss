@@ -1377,6 +1377,8 @@ body > [data-popper-placement] {
 }
 
 .detailed-status__action-bar {
+  $thread-margin: 46px + 10px;
+
   background: lighten($ui-base-color, 4%);
   border-top: 1px solid lighten($ui-base-color, 8%);
   border-bottom: 1px solid lighten($ui-base-color, 8%);
@@ -1386,6 +1388,7 @@ body > [data-popper-placement] {
   align-items: center;
   gap: 18px;
   padding: 10px 16px;
+  padding-left: $thread-margin + 16px;
 
   @media screen and (max-width: $no-columns-breakpoint) {
     gap: 11px;
