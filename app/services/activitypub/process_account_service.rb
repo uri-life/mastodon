@@ -32,6 +32,8 @@ class ActivityPub::ProcessAccountService < BaseService
       @suspension_changed = false
 
       if @account.nil?
+        return nil unless Account.find_remote_any(@domain)
+
         with_redis do |redis|
           return nil if redis.pfcount("unique_subdomains_for:#{PublicSuffix.domain(@domain, ignore_private: true)}") >= SUBDOMAINS_RATELIMIT
 
