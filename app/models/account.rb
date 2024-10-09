@@ -76,7 +76,7 @@ class Account < ApplicationRecord
   USERNAME_ONLY_RE = /\A#{USERNAME_RE}\z/i
   USERNAME_LENGTH_LIMIT = 30
   DISPLAY_NAME_LENGTH_LIMIT = 80
-  NOTE_LENGTH_LIMIT = 500
+  NOTE_LENGTH_LIMIT = 1000
 
   # Hard limits for federated content
   USERNAME_LENGTH_HARD_LIMIT = 2048
