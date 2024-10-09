@@ -163,7 +163,7 @@ class About extends PureComponent {
             ))}
           </Section>
 
-          <Section title={intl.formatMessage(messages.rules)}>
+          <Section open title={intl.formatMessage(messages.rules)}>
             {!isLoading && (server.get('rules', ImmutableList()).isEmpty() ? (
               <p><FormattedMessage id='about.not_available' defaultMessage='This information has not been made available on this server.' /></p>
             ) : (
