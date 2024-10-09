@@ -126,21 +126,20 @@ class About extends PureComponent {
             <p><FormattedMessage id='about.powered_by' defaultMessage='Decentralized social media powered by {mastodon}' values={{ mastodon: <a href='https://joinmastodon.org' className='about__mail' target='_blank'>Mastodon</a> }} /></p>
           </div>
 
-          <div className='about__meta'>
-            <div className='about__meta__column'>
-              <h4><FormattedMessage id='server_banner.administered_by' defaultMessage='Administered by:' /></h4>
-
-              <Account id={server.getIn(['contact', 'account', 'id'])} size={36} minimal />
-            </div>
-
-            <hr className='about__meta__divider' />
-
-            <div className='about__meta__column'>
-              <h4><FormattedMessage id='about.contact' defaultMessage='Contact:' /></h4>
-
-              {isLoading ? <Skeleton width='10ch' /> : <a className='about__mail' href={`mailto:${server.getIn(['contact', 'email'])}`}>{server.getIn(['contact', 'email'])}</a>}
-            </div>
-          </div>
+          <Section open title={intl.formatMessage(messages.rules)}>
+            {!isLoading && (server.get('rules', ImmutableList()).isEmpty() ? (
+              <p><FormattedMessage id='about.not_available' defaultMessage='This information has not been made available on this server.' /></p>
+            ) : (
+              <ol className='rules-list'>
+                {server.get('rules').map(rule => (
+                  <li key={rule.get('id')}>
+                    <div className='rules-list__text'>{rule.get('text')}</div>
+                    {rule.get('hint').length > 0 && (<div className='rules-list__hint'>{rule.get('hint')}</div>)}
+                  </li>
+                ))}
+              </ol>
+            ))}
+          </Section>
 
           <Section open title={intl.formatMessage(messages.title)}>
             {extendedDescription.get('isLoading') ? (
@@ -160,21 +159,6 @@ class About extends PureComponent {
               />
             ) : (
               <p><FormattedMessage id='about.not_available' defaultMessage='This information has not been made available on this server.' /></p>
-            ))}
-          </Section>
-
-          <Section open title={intl.formatMessage(messages.rules)}>
-            {!isLoading && (server.get('rules', ImmutableList()).isEmpty() ? (
-              <p><FormattedMessage id='about.not_available' defaultMessage='This information has not been made available on this server.' /></p>
-            ) : (
-              <ol className='rules-list'>
-                {server.get('rules').map(rule => (
-                  <li key={rule.get('id')}>
-                    <div className='rules-list__text'>{rule.get('text')}</div>
-                    {rule.get('hint').length > 0 && (<div className='rules-list__hint'>{rule.get('hint')}</div>)}
-                  </li>
-                ))}
-              </ol>
             ))}
           </Section>
 
@@ -208,6 +192,22 @@ class About extends PureComponent {
               <p><FormattedMessage id='about.not_available' defaultMessage='This information has not been made available on this server.' /></p>
             ))}
           </Section>
+
+          <div className='about__meta'>
+            <div className='about__meta__column'>
+              <h4><FormattedMessage id='server_banner.administered_by' defaultMessage='Administered by:' /></h4>
+
+              <Account id={server.getIn(['contact', 'account', 'id'])} size={36} minimal />
+            </div>
+
+            <hr className='about__meta__divider' />
+
+            <div className='about__meta__column'>
+              <h4><FormattedMessage id='about.contact' defaultMessage='Contact:' /></h4>
+
+              {isLoading ? <Skeleton width='10ch' /> : <a className='about__mail' href={`mailto:${server.getIn(['contact', 'email'])}`}>{server.getIn(['contact', 'email'])}</a>}
+            </div>
+          </div>
 
           <LinkFooter />
 
