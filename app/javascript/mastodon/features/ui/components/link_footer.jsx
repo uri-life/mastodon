@@ -71,6 +71,8 @@ class LinkFooter extends PureComponent {
           )}
           {DividingCircle}
           <Link to='/privacy-policy' target={multiColumn ? '_blank' : undefined}><FormattedMessage id='footer.privacy_policy' defaultMessage='Privacy policy' /></Link>
+          {DividingCircle}
+          <Link to='/auth/sign_out' onClick={this.handleLogoutClick}><FormattedMessage id='footer.log_out' defaultMessage='Logout' /></Link>
         </p>
 
         <p>
