@@ -6,7 +6,7 @@
 import type { CSSProperties } from 'react';
 import { useState, useRef, useCallback } from 'react';
 
-import { FormattedDate, FormattedMessage } from 'react-intl';
+import { useIntl, FormattedDate, FormattedMessage } from 'react-intl';
 
 import classNames from 'classnames';
 import { Link } from 'react-router-dom';
@@ -71,6 +71,7 @@ export const DetailedStatus: React.FC<{
   const [height, setHeight] = useState(0);
   const [showDespiteFilter, setShowDespiteFilter] = useState(false);
   const nodeRef = useRef<HTMLDivElement>();
+  const intl = useIntl();
 
   const handleOpenVideo = useCallback(
     (options: VideoModalOptions) => {
@@ -126,6 +127,7 @@ export const DetailedStatus: React.FC<{
   let applicationLink;
   let reblogLink;
   let attachmentAspectRatio;
+  let languageNameLink;
 
   if (properStatus.get('media_attachments').getIn([0, 'type']) === 'video') {
     attachmentAspectRatio = `${properStatus.get('media_attachments').getIn([0, 'meta', 'original', 'width'])} / ${properStatus.get('media_attachments').getIn([0, 'meta', 'original', 'height'])}`;
@@ -153,6 +155,8 @@ export const DetailedStatus: React.FC<{
 
   const language =
     status.getIn(['translation', 'language']) || status.get('language');
+
+  const sourceLanguage: string | null | undefined = status.get('language');
 
   if (pictureInPicture.get('inUse')) {
     media = <PictureInPicturePlaceholder aspectRatio={attachmentAspectRatio} />;
@@ -256,6 +260,27 @@ export const DetailedStatus: React.FC<{
       ·<VisibilityIcon visibility={status.get('visibility')} />
     </>
   );
+
+  if (sourceLanguage !== undefined && sourceLanguage !== null) {
+    try {
+      languageNameLink = (
+        <>
+          ·
+          <span>
+            {new Intl.DisplayNames([intl.locale], { type: 'language' }).of(
+              sourceLanguage,
+            )}
+          </span>
+        </>
+      );
+    } catch {
+      languageNameLink = (
+        <>
+          ·<span>{sourceLanguage}</span>
+        </>
+      );
+    }
+  }
 
   if (['private', 'direct'].includes(status.get('visibility') as string)) {
     reblogLink = '';
@@ -390,6 +415,7 @@ export const DetailedStatus: React.FC<{
             </a>
 
             {visibilityLink}
+            {languageNameLink}
             {applicationLink}
           </div>
 
