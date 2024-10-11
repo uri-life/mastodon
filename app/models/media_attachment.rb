@@ -148,12 +148,14 @@ class MediaAttachment < ApplicationRecord
 
   AUDIO_STYLES = {
     original: {
-      format: 'mp3',
-      content_type: 'audio/mpeg',
+      format: 'm4a',
+      content_type: 'audio/mp4',
       convert_options: {
         output: {
           'loglevel' => 'fatal',
-          'q:a' => 2,
+          'movflags' => 'faststart', # Move metadata to start of file so playback can begin before download finishes
+          'c:a' => 'aac',
+          'b:a' => '256k',
         }.freeze,
       }.freeze,
     }.freeze,
