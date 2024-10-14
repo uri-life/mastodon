@@ -26,9 +26,9 @@ pipeline {
                 stage('Prepare') {
                     steps {
                         script {
-                            if (env.BRANCH_NAME == 'uri') {
                                 env.DOCKER_TAG = 'testing'
                                 env.MASTODON_VERSION_PRERELEASE = 'testing'
+                            if (env.BRANCH_NAME ==~ /^(v(?>[0-9]\.?){1,3})\/uri[0-9]+\.[0-9]+$/) {
                                 env.DOCKER_LATEST = 'false'
                                 env.MASTODON_VERSION_BUILDARG = "MASTODON_VERSION_PRERELEASE=${MASTODON_VERSION_PRERELEASE}"
                             } else {
