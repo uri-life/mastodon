@@ -26,15 +26,18 @@ pipeline {
                 stage('Prepare') {
                     steps {
                         script {
-                                env.DOCKER_TAG = 'testing'
-                                env.MASTODON_VERSION_PRERELEASE = 'testing'
                             if (env.BRANCH_NAME ==~ /^(v(?>[0-9]\.?){1,3})\/uri[0-9]+\.[0-9]+$/) {
+                                env.DOCKER_TAG = env.TAG_NAME.replaceAll('\\/', '-') + '-staging'
+                                env.MASTODON_VERSION_PRERELEASE = 'staging'
+                                env.MASTODON_VERSION_METADATA = env.BRANCH_NAME.replaceAll('(v(?>[0-9]\\.?){1,3})\\/', '')
                                 env.DOCKER_LATEST = 'false'
+                                env.DOCKER_STAGING = 'true'
                                 env.MASTODON_VERSION_BUILDARG = "MASTODON_VERSION_PRERELEASE=${MASTODON_VERSION_PRERELEASE}"
                             } else {
                                 env.DOCKER_TAG = env.TAG_NAME.replaceAll('\\+', '-')
                                 env.MASTODON_VERSION_METADATA = env.TAG_NAME.replaceAll('(v(?>[0-9]\\.?){1,3})\\+', '')
                                 env.DOCKER_LATEST = 'true'
+                                env.DOCKER_STAGING = 'false'
                                 env.MASTODON_VERSION_BUILDARG = "MASTODON_VERSION_METADATA=${MASTODON_VERSION_METADATA}"
                             }
                             env.GITHUB_REPOSITORY = "${params.URL}"
@@ -66,6 +69,10 @@ pipeline {
                                             sh "docker tag $DOCKER_IMAGE:$DOCKER_TAG-${TARGET} $DOCKER_IMAGE:latest-${TARGET}"
                                             sh "docker tag $DOCKER_IMAGE_STREAMING:$DOCKER_TAG-${TARGET} $DOCKER_IMAGE_STREAMING:latest-${TARGET}"
                                         }
+                                        if (env.DOCKER_STAGING == 'true') {
+                                            sh "docker tag $DOCKER_IMAGE:$DOCKER_TAG-${TARGET} $DOCKER_IMAGE:staging-${TARGET}"
+                                            sh "docker tag $DOCKER_IMAGE_STREAMING:$DOCKER_TAG-${TARGET} $DOCKER_IMAGE_STREAMING:staging-${TARGET}"
+                                        }
                                     }
                                 }
                             }
@@ -77,6 +84,10 @@ pipeline {
                                         if (env.DOCKER_LATEST == 'true') {
                                             sh "docker push $DOCKER_IMAGE:latest-${TARGET}"
                                             sh "docker push $DOCKER_IMAGE_STREAMING:latest-${TARGET}"
+                                        }
+                                        if (env.DOCKER_STAGING == 'true') {
+                                            sh "docker push $DOCKER_IMAGE:staging-${TARGET}"
+                                            sh "docker push $DOCKER_IMAGE_STREAMING:staging-${TARGET}"
                                         }
                                     }
                                 }
@@ -93,6 +104,10 @@ pipeline {
                                 sh "docker manifest create $DOCKER_IMAGE:latest --amend $DOCKER_IMAGE:latest-amd64"
                                 sh "docker manifest create $DOCKER_IMAGE_STREAMING:latest --amend $DOCKER_IMAGE_STREAMING:latest-amd64"
                             }
+                            if (env.DOCKER_STAGING == 'true') {
+                                sh "docker manifest create $DOCKER_IMAGE:staging --amend $DOCKER_IMAGE:staging-amd64"
+                                sh "docker manifest create $DOCKER_IMAGE_STREAMING:staging --amend $DOCKER_IMAGE_STREAMING:staging-amd64"
+                            }
                         }
                     }
                 }
@@ -104,6 +119,10 @@ pipeline {
                             if (env.DOCKER_LATEST == 'true') {
                                 sh "docker manifest push $DOCKER_IMAGE:latest"
                                 sh "docker manifest push $DOCKER_IMAGE_STREAMING:latest"
+                            }
+                            if (env.DOCKER_STAGING == 'true') {
+                                sh "docker manifest push $DOCKER_IMAGE:staging"
+                                sh "docker manifest push $DOCKER_IMAGE_STREAMING:staging"
                             }
                         }
                     }
