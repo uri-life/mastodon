@@ -11,7 +11,7 @@ pipeline {
             }
             when {
                 anyOf {
-                    branch 'uri';
+                    branch pattern: '^(v(?>[0-9]\\.?){1,3})\\/uri[0-9]+\\.[0-9]+$', comparator: 'REGEXP';
                     buildingTag();
                 }
             }
@@ -26,8 +26,8 @@ pipeline {
                 stage('Prepare') {
                     steps {
                         script {
-                            if (env.BRANCH_NAME ==~ /^(v(?>[0-9]\.?){1,3})\/uri[0-9]+\.[0-9]+$/) {
-                                env.DOCKER_TAG = env.TAG_NAME.replaceAll('\\/', '-') + '-staging'
+                            if (env.BRANCH_NAME != env.BRANCH_NAME?.replaceAll('^(v(?>[0-9]\\.?){1,3})\\/uri[0-9]+\\.[0-9]+$', '')) {
+                                env.DOCKER_TAG = env.BRANCH_NAME.replaceAll('\\/', '-') + '-staging'
                                 env.MASTODON_VERSION_PRERELEASE = 'staging'
                                 env.MASTODON_VERSION_METADATA = env.BRANCH_NAME.replaceAll('(v(?>[0-9]\\.?){1,3})\\/', '')
                                 env.DOCKER_LATEST = 'false'
