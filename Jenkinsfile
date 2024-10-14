@@ -33,7 +33,7 @@ pipeline {
                                 env.MASTODON_VERSION_BUILDARG = "MASTODON_VERSION_PRERELEASE=${MASTODON_VERSION_PRERELEASE}"
                             } else {
                                 env.DOCKER_TAG = env.TAG_NAME.replaceAll('\\+', '-')
-                                env.MASTODON_VERSION_METADATA = env.TAG_NAME.replaceAll('(v(?>[0-9]\\.?){1,3})\\+', '-')
+                                env.MASTODON_VERSION_METADATA = env.TAG_NAME.replaceAll('(v(?>[0-9]\\.?){1,3})\\+', '')
                                 env.DOCKER_LATEST = 'true'
                                 env.MASTODON_VERSION_BUILDARG = "MASTODON_VERSION_METADATA=${MASTODON_VERSION_METADATA}"
                             }
