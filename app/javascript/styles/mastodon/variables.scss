@@ -90,8 +90,8 @@ $media-modal-media-max-height: 80%;
 $no-gap-breakpoint: 1175px;
 $mobile-breakpoint: 630px;
 
-$font-sans-serif: 'mastodon-font-sans-serif' !default;
-$font-display: 'mastodon-font-display' !default;
+$font-sans-serif: 'Pretendard Variable', 'Pretendard JP Variable' !default;
+$font-display: 'Pretendard Variable', 'Pretendard JP Variable' !default;
 $font-monospace: 'mastodon-font-monospace' !default;
 
 :root {
@@ -110,7 +110,7 @@ $font-monospace: 'mastodon-font-monospace' !default;
   --surface-variant-background-color: #{$ui-base-color};
   --surface-variant-active-background-color: #{lighten($ui-base-color, 4%)};
   --on-surface-color: #{transparentize($ui-base-color, 0.5)};
-  --avatar-border-radius: 8px;
+  --avatar-border-radius: 50%;
   --media-outline-color: #{rgba(#fcf8ff, 0.15)};
   --overlay-icon-shadow: drop-shadow(0 0 8px #{rgba($base-shadow-color, 0.25)});
   --error-background-color: #{darken($error-red, 16%)};
