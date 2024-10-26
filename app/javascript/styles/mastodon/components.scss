@@ -2152,6 +2152,10 @@ body > [data-popper-placement] {
     font-weight: 500;
     text-align: center;
   }
+
+  .account__avatar-composite & {
+    border-radius: 2px;
+  }
 }
 
 a .account__avatar {
