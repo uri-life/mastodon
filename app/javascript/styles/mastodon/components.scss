@@ -1072,6 +1072,18 @@ body > [data-popper-placement] {
   clear: both;
 }
 
+.status__content .color-box {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 0.75em;
+  height: 0.75em;
+  margin-inline-end: 0.0625em;
+  border-radius: 50%;
+  border-width: 1px;
+  border-style: solid;
+  border-color: $ui-secondary-color;
+}
+
 .status__content,
 .edit-indicator__content,
 .reply-indicator__content {
