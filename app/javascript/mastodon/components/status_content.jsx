@@ -117,15 +117,14 @@ class StatusContent extends PureComponent {
         link.setAttribute('href', `/tags/${link.text.replace(/^#/, '')}`);
         if (/^#(?:[0-9A-F]{3}|[0-9A-F]{6})$/i.test(link.textContent)) {
           const color = link.textContent;
-          const red = parseInt(color.slice(1, 3), 16) / 255;
-          const green = parseInt(color.slice(3, 5), 16) / 255;
-          const blue = parseInt(color.slice(5, 7), 16) / 255;
-          const toLinear = (value) => value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
-          const linearRed = toLinear(red);
-          const linearGreen = toLinear(green);
-          const linearBlue = toLinear(blue);
-          const luminance = 0.2126 * linearRed + 0.7152 * linearGreen + 0.0722 * linearBlue;
-          const isColorLight = luminance > 0.179;
+          const isColorLight = (() => {
+            const toLinear = (value) => value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+            const luminance =
+              0.2126 * toLinear(parseInt(color.slice(1, 3), 16) / 255) +
+              0.7152 * toLinear(parseInt(color.slice(3, 5), 16) / 255) +
+              0.0722 * toLinear(parseInt(color.slice(5, 7), 16) / 255);
+            return luminance > 0.179;
+          })();
           const colorSpan = document.createElement('span');
           colorSpan.style.backgroundColor = color;
           colorSpan.classList.add('color-box');
