@@ -24,14 +24,14 @@
 class CustomEmoji < ApplicationRecord
   include Attachmentable
 
-  LIMIT = 256.kilobytes
+  LIMIT = 1.megabyte
   MINIMUM_SHORTCODE_SIZE = 2
 
-  SHORTCODE_RE_FRAGMENT = '[a-zA-Z0-9_]{2,}'
+  SHORTCODE_RE_FRAGMENT = '[0-9A-Za-z_]+'
 
-  SCAN_RE = /(?<=[^[:alnum:]:]|\n|^)
+  SCAN_RE = /(?<=[^0-9A-Za-z]|\n|^)
     :(#{SHORTCODE_RE_FRAGMENT}):
-    (?=[^[:alnum:]:]|$)/x
+    (?=[^0-9A-Za-z_]|$)/x
   SHORTCODE_ONLY_RE = /\A#{SHORTCODE_RE_FRAGMENT}\z/
 
   IMAGE_MIME_TYPES = %w(image/png image/gif image/webp).freeze
