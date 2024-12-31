@@ -6,7 +6,7 @@
   font-family: inherit;
   background: $ui-base-color;
   color: $darker-text-color;
-  border-radius: 4px;
+  border-radius: 50vh;
   border: 1px solid var(--background-border-color);
   font-size: 17px;
   line-height: normal;
@@ -15,7 +15,7 @@
 
 @mixin search-popout {
   background: $simple-background-color;
-  border-radius: 4px;
+  border-radius: 50vh;
   padding: 10px 14px;
   padding-bottom: 14px;
   margin-top: 10px;
