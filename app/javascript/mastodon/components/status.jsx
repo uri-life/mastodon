@@ -33,6 +33,7 @@ import { getHashtagBarForStatus } from './hashtag_bar';
 import { RelativeTimestamp } from './relative_timestamp';
 import StatusActionBar from './status_action_bar';
 import StatusContent from './status_content';
+import StatusReactions from './status_reactions';
 import { StatusThreadLabel } from './status_thread_label';
 import { VisibilityIcon } from './visibility_icon';
 
@@ -583,6 +584,8 @@ class Status extends ImmutablePureComponent {
                 {hashtagBar}
               </>
             )}
+
+            <StatusReactions statusId={status.get('id')} reactions={status.get('reactions')} canReact={false} />
 
             <StatusActionBar scrollKey={scrollKey} status={status} account={account}  {...other} />
           </div>
