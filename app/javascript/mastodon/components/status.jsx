@@ -33,6 +33,7 @@ import { getHashtagBarForStatus } from './hashtag_bar';
 import { RelativeTimestamp } from './relative_timestamp';
 import StatusActionBar from './status_action_bar';
 import StatusContent from './status_content';
+import StatusReactions from './status_reactions';
 import { StatusThreadLabel } from './status_thread_label';
 import { VisibilityIcon } from './visibility_icon';
 
@@ -393,6 +394,7 @@ class Status extends ImmutablePureComponent {
     };
 
     let media, statusAvatar, prepend, rebloggedByText;
+    let languageName;
 
     if (hidden) {
       return (
@@ -537,6 +539,26 @@ class Status extends ImmutablePureComponent {
       statusAvatar = <AvatarOverlay account={status.get('account')} friend={account} />;
     }
 
+    const language = status.get('language');
+
+    if (language !== undefined && language !== null && Intl !== undefined) {
+      try {
+        languageName = (
+          <div className='status__language-name' aria-hidden='true'>
+            {new Intl.DisplayNames([intl.locale], { type: 'language' }).of(language)}
+          </div>
+        );
+      } catch {
+        languageName = (
+          <div className='status__language-name' aria-hidden='true'>
+            {language}
+          </div>
+        );
+      }
+    } else {
+      languageName = null;
+    }
+
     const {statusContentProps, hashtagBar} = getHashtagBarForStatus(status);
     const expanded = (!matchedFilters || this.state.showDespiteFilter) && (!status.get('hidden') || status.get('spoiler_text').length === 0);
 
@@ -553,6 +575,7 @@ class Status extends ImmutablePureComponent {
               <a href={`/@${status.getIn(['account', 'acct'])}/${status.get('id')}`} className='status__relative-time' target='_blank' rel='noopener noreferrer'>
                 <span className='status__visibility-icon'><VisibilityIcon visibility={status.get('visibility')} /></span>
                 <RelativeTimestamp timestamp={status.get('created_at')} />{status.get('edited_at') && <abbr title={intl.formatMessage(messages.edited, { date: intl.formatDate(status.get('edited_at'), { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' }) })}> *</abbr>}
+                {languageName}
               </a>
 
               <a onClick={this.handleAccountClick} href={`/@${status.getIn(['account', 'acct'])}`} title={status.getIn(['account', 'acct'])} data-hover-card-account={status.getIn(['account', 'id'])} className='status__display-name' target='_blank' rel='noopener noreferrer'>
@@ -583,6 +606,8 @@ class Status extends ImmutablePureComponent {
                 {hashtagBar}
               </>
             )}
+
+            <StatusReactions statusId={status.get('id')} reactions={status.get('reactions')} canReact={false} />
 
             <StatusActionBar scrollKey={scrollKey} status={status} account={account}  {...other} />
           </div>

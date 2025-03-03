@@ -151,6 +151,10 @@ body {
       }
     }
   }
+
+  :lang(ko) {
+    font-feature-settings: 'kern', 'ss05';
+  }
 }
 
 a {

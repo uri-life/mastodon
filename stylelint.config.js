@@ -1,6 +1,8 @@
 module.exports = {
   extends: ['stylelint-config-standard-scss', 'stylelint-config-prettier-scss'],
   ignoreFiles: [
+    'app/javascript/styles/fonts/pretendardvariable.scss',
+    'app/javascript/styles/fonts/pretendardvariable-jp.scss',
     'app/javascript/styles/mastodon/reset.scss',
     'coverage/**/*',
     'node_modules/**/*',

@@ -409,3 +409,11 @@ USER mastodon
 EXPOSE 3000
 # Set container tini as default entry point
 ENTRYPOINT ["/usr/bin/tini", "--"]
+
+# Set environment variables
+ARG GITHUB_REPOSITORY=mastodon/mastodon
+ENV GITHUB_REPOSITORY=$GITHUB_REPOSITORY
+ARG SOURCE_BASE_URL=https://github.com/$GITHUB_REPOSITORY
+ENV SOURCE_BASE_URL=$SOURCE_BASE_URL
+ARG SOURCE_TAG
+ENV SOURCE_TAG=$SOURCE_TAG
