@@ -18,7 +18,7 @@
       %link{ rel: 'apple-touch-icon', sizes: "#{size}x#{size}", href: app_icon_path(size.to_i) || frontend_asset_path("icons/apple-touch-icon-#{size}x#{size}.png") }/
 
     - if use_mask_icon?
-      %link{ rel: 'mask-icon', href: frontend_asset_path('images/logo-symbol-icon.svg'), color: '#6364FF' }/
+      %link{ rel: 'mask-icon', href: frontend_asset_path('images/logo-symbol-icon.svg'), color: '#7ea7cf' }/
     %link{ rel: 'manifest', href: manifest_path(format: :json) }/
     = theme_color_tags current_theme
     %meta{ name: 'mobile-web-app-capable', content: 'yes' }/

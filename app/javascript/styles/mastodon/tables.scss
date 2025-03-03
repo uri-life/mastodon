@@ -187,7 +187,7 @@ a.table-action-link {
     z-index: 1;
     border: 1px solid var(--background-border-color);
     background: var(--background-color);
-    border-radius: 4px 4px 0 0;
+    border-radius: 23px 23px 0 0;
     height: 47px;
     align-items: center;
 
@@ -270,7 +270,7 @@ a.table-action-link {
     }
 
     &:last-child {
-      border-radius: 0 0 4px 4px;
+      border-radius: 0 0 23px 23px;
     }
 
     &__content {
@@ -299,7 +299,7 @@ a.table-action-link {
         margin-inline-end: 10px;
 
         .emojione {
-          width: 32px;
+          width: auto;
           height: 32px;
         }
       }
