@@ -13,7 +13,6 @@ class ActivityPub::Activity
     @account = account
     @object  = @json['object']
     @options = options
-    Rails.logger.info("Processing #{@json['type']} activity #{@json['id']} from #{@account.pretty_acct} (#{@object})")
   end
 
   def perform
