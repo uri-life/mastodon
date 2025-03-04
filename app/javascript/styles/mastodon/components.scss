@@ -992,7 +992,7 @@ body > [data-popper-placement] {
   vertical-align: middle;
   object-fit: contain;
   margin: -0.2ex 0.15em 0.2ex;
-  width: auto;
+  width: 16px;
   height: 16px;
 
   img {
@@ -1034,7 +1034,7 @@ body > [data-popper-placement] {
   }
 
   .emojione {
-    width: auto;
+    width: 20px;
     height: 20px;
     margin: -3px 0 0;
   }
@@ -1264,7 +1264,7 @@ body > [data-popper-placement] {
 .edit-indicator__content,
 .reply-indicator__content {
   .emojione {
-    width: auto;
+    width: 18px;
     height: 18px;
     margin: -3px 0 0;
   }
@@ -1275,7 +1275,7 @@ body > [data-popper-placement] {
   overflow-y: auto;
 
   .emojione {
-    width: auto;
+    width: 20px;
     height: 20px;
     margin: -3px 0 0;
   }
@@ -1727,7 +1727,7 @@ body > [data-popper-placement] {
     line-height: 24px;
 
     .emojione {
-      width: auto;
+      width: 24px;
       height: 24px;
       margin: -1px 0 0;
     }
@@ -6935,7 +6935,7 @@ a.status-card {
     line-height: 24px;
 
     .emojione {
-      width: auto;
+      width: 24px;
       height: 24px;
       margin: -1px 0 0;
     }
@@ -8304,7 +8304,7 @@ noscript {
       margin-bottom: 16px;
 
       .emojione {
-        width: auto;
+        width: 22px;
         height: 22px;
       }
 
