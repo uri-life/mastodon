@@ -1761,6 +1761,11 @@ body > [data-popper-placement] {
     height: 40px;
     color: $dark-text-color;
   }
+
+  .reactions-bar__item__emoji {
+    height: 24px;
+    margin: 5px 0;
+  }
 }
 
 .embed {
@@ -8725,9 +8730,9 @@ noscript {
 
     &__emoji {
       display: block;
-      margin: 3px 0;
+      margin: 4px 0;
       width: auto;
-      height: 16px;
+      height: 20px;
 
       img {
         display: block;
