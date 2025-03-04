@@ -14,6 +14,7 @@ module Account::Associations
     has_many :mentions, inverse_of: :account, dependent: :destroy
     has_many :conversations, class_name: 'AccountConversation', dependent: :destroy, inverse_of: :account
     has_many :scheduled_statuses, inverse_of: :account, dependent: :destroy
+    has_many :status_reactions, inverse_of: :account, dependent: :destroy
 
     # Notifications
     has_many :notifications, inverse_of: :account, dependent: :destroy

@@ -45,6 +45,13 @@ class LinkFooter extends PureComponent {
 
     const DividingCircle = <span aria-hidden>{' · '}</span>;
 
+    const SignOutLink = (
+      <>
+        {DividingCircle}
+        <Link to='/auth/sign_out' onClick={this.handleLogoutClick}><FormattedMessage id='navigation_bar.logout' defaultMessage='Logout' /></Link>
+      </>
+    );
+
     return (
       <div className='link-footer'>
         <p>
@@ -71,14 +78,13 @@ class LinkFooter extends PureComponent {
           )}
           {DividingCircle}
           <Link to='/privacy-policy' target={multiColumn ? '_blank' : undefined}><FormattedMessage id='footer.privacy_policy' defaultMessage='Privacy policy' /></Link>
+          {signedIn && SignOutLink}
         </p>
 
         <p>
           <strong>Mastodon</strong>:
           {' '}
           <a href='https://joinmastodon.org' target='_blank'><FormattedMessage id='footer.about' defaultMessage='About' /></a>
-          {DividingCircle}
-          <a href='https://joinmastodon.org/apps' target='_blank'><FormattedMessage id='footer.get_app' defaultMessage='Get the app' /></a>
           {DividingCircle}
           <Link to='/keyboard-shortcuts'><FormattedMessage id='footer.keyboard_shortcuts' defaultMessage='Keyboard shortcuts' /></Link>
           {DividingCircle}
