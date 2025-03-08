@@ -7,7 +7,6 @@ class ActivityPub::Activity::EmojiReact < ActivityPub::Activity
     original_status = status_from_uri(object_uri)
     name = @json['content']
     return if original_status.nil? ||
-              !original_status.account.local? ||
               delete_arrived_first?(@json['id'])
 
     if CUSTOM_EMOJI_REGEX.match?(name)
