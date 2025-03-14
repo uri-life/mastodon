@@ -124,7 +124,7 @@ class ColumnSettings extends PureComponent {
         <section role='group' aria-labelledby='notifications-reaction'>
           <h3 id='notifications-reaction'><FormattedMessage id='notifications.column_settings.reaction' defaultMessage='Reactions:' /></h3>
 
-          <div className='column-settings__pillbar'>
+          <div className='column-settings__row'>
             <SettingToggle disabled={browserPermission === 'denied'} prefix='notifications_desktop' settings={settings} settingPath={['alerts', 'reaction']} onChange={onChange} label={alertStr} />
             {showPushSettings && <SettingToggle prefix='notifications_push' settings={pushSettings} settingPath={['alerts', 'reaction']} onChange={this.onPushChange} label={pushStr} />}
             <SettingToggle prefix='notifications' settings={settings} settingPath={['shows', 'reaction']} onChange={onChange} label={showStr} />
