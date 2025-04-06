@@ -3,7 +3,7 @@
 class EmojiFormatter
   include RoutingHelper
 
-  DISALLOWED_BOUNDING_REGEX = /[[:alnum:]:]/
+  DISALLOWED_BOUNDING_REGEX = /[0-9A-Za-z_]/
 
   attr_reader :html, :custom_emojis, :options
 
