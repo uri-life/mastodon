@@ -49,7 +49,7 @@
 .button {
   background-color: $ui-button-background-color;
   border: 10px none;
-  border-radius: 4px;
+  border-radius: 23px;
   box-sizing: border-box;
   color: $ui-button-color;
   cursor: pointer;
@@ -232,7 +232,7 @@
   color: $action-button-color;
   border: 0;
   padding: 0;
-  border-radius: 4px;
+  border-radius: 100vh;
   background: transparent;
   cursor: pointer;
   align-items: center;
@@ -304,7 +304,7 @@
     background: rgba($black, 0.65);
     backdrop-filter: blur(10px) saturate(180%) contrast(75%) brightness(70%);
     color: rgba($white, 0.7);
-    border-radius: 4px;
+    border-radius: 23px;
     padding: 2px;
 
     &:hover {
@@ -338,7 +338,7 @@
 .text-icon-button {
   color: $lighter-text-color;
   border: 0;
-  border-radius: 4px;
+  border-radius: 23px;
   background: transparent;
   cursor: pointer;
   font-weight: 600;
@@ -421,7 +421,7 @@ body > [data-popper-placement] {
     box-shadow: var(--dropdown-shadow);
     background: $ui-base-color;
     border: 1px solid var(--background-border-color);
-    border-radius: 0 0 4px 4px;
+    border-radius: 0 0 23px 23px;
     color: $secondary-text-color;
     font-size: 14px;
     padding: 0;
@@ -438,7 +438,7 @@ body > [data-popper-placement] {
       color: $secondary-text-color;
 
       &:last-child {
-        border-radius: 0 0 4px 4px;
+        border-radius: 0 0 23px 23px;
       }
 
       &:hover,
@@ -536,7 +536,7 @@ body > [data-popper-placement] {
 
   .layout-multiple-columns &,
   .column & {
-    padding: 15px;
+    padding: 24px;
   }
 
   &__highlightable {
@@ -544,7 +544,7 @@ body > [data-popper-placement] {
     flex-direction: column;
     gap: 16px;
     flex: 0 1 auto;
-    border-radius: 4px;
+    border-radius: 23px;
     border: 1px solid var(--background-border-color);
     transition: border-color 300ms linear;
     min-height: 0;
@@ -563,7 +563,7 @@ body > [data-popper-placement] {
     background: $ui-primary-color;
     box-shadow: 0 2px 6px rgba($base-shadow-color, 0.3);
     padding: 8px 10px;
-    border-radius: 4px;
+    border-radius: 23px;
     font-size: 13px;
     font-weight: 400;
 
@@ -597,15 +597,16 @@ body > [data-popper-placement] {
 
     &__border {
       background: url('../images/warning-stripes.svg') repeat-y;
-      width: 5px;
+      background-size: 100% auto;
+      width: 8px;
       flex: 0 0 auto;
 
       &:first-child {
-        border-start-start-radius: 4px;
+        border-start-start-radius: 23px;
       }
 
       &:last-child {
-        border-start-end-radius: 4px;
+        border-start-end-radius: 23px;
       }
     }
 
@@ -625,7 +626,7 @@ body > [data-popper-placement] {
     background: $ui-base-color;
     font-family: inherit;
     font-size: 14px;
-    padding: 12px;
+    padding: 18px;
     line-height: normal;
     border: 0;
     outline: 0;
@@ -636,7 +637,7 @@ body > [data-popper-placement] {
   }
 
   .spoiler-input__input {
-    padding: 12px 12px - 5px;
+    padding: 18px 18px - 8px;
     background: rgba($ui-highlight-color, 0.05);
     color: $highlight-text-color;
   }
@@ -759,7 +760,7 @@ body > [data-popper-placement] {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    padding: 12px;
+    padding: 18px;
     padding-top: 0;
   }
 
@@ -788,6 +789,10 @@ body > [data-popper-placement] {
     .icon-button .icon {
       width: 20px;
       height: 20px;
+    }
+
+    button {
+      border-radius: 6px;
     }
   }
 
@@ -900,7 +905,7 @@ body > [data-popper-placement] {
   gap: 4px;
   background: transparent;
   color: $highlight-text-color;
-  border-radius: 6px;
+  border-radius: 23px;
   border: 1px solid $highlight-text-color;
   padding: 4px 8px;
   font-size: 13px;
@@ -992,11 +997,18 @@ body > [data-popper-placement] {
   vertical-align: middle;
   object-fit: contain;
   margin: -0.2ex 0.15em 0.2ex;
-  width: 16px;
+  width: auto;
   height: 16px;
 
   img {
     width: auto;
+  }
+}
+
+.status,
+.detailed-status {
+  .reactions-bar {
+    width: 100%;
   }
 }
 
@@ -1006,6 +1018,18 @@ body > [data-popper-placement] {
 
 .status__content {
   clear: both;
+}
+
+.status__content .color-box {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 0.75em;
+  height: 0.75em;
+  margin-inline-end: 0.0625em;
+  border-radius: 50%;
+  border-width: 1px;
+  border-style: solid;
+  border-color: $ui-secondary-color;
 }
 
 .status__content,
@@ -1034,7 +1058,7 @@ body > [data-popper-placement] {
   }
 
   .emojione {
-    width: 20px;
+    width: auto;
     height: 20px;
     margin: -3px 0 0;
   }
@@ -1182,7 +1206,7 @@ body > [data-popper-placement] {
 }
 
 .edit-indicator {
-  border-radius: 4px 4px 0 0;
+  border-radius: 23px 23px 0 0;
   background: lighten($ui-base-color, 4%);
   padding: 12px;
   overflow-y: auto;
@@ -1264,7 +1288,7 @@ body > [data-popper-placement] {
 .edit-indicator__content,
 .reply-indicator__content {
   .emojione {
-    width: 18px;
+    width: auto;
     height: 18px;
     margin: -3px 0 0;
   }
@@ -1275,7 +1299,7 @@ body > [data-popper-placement] {
   overflow-y: auto;
 
   .emojione {
-    width: 20px;
+    width: auto;
     height: 20px;
     margin: -3px 0 0;
   }
@@ -1486,6 +1510,7 @@ body > [data-popper-placement] {
     .more-from-author,
     .status-card,
     .hashtag-bar,
+    .reactions-bar,
     .content-warning,
     .filter-warning {
       margin-inline-start: $thread-margin;
@@ -1557,6 +1582,18 @@ body > [data-popper-placement] {
   order: 2;
   flex: 0 0 auto;
   color: $dark-text-color;
+
+  &:hover {
+    text-decoration: none !important;
+
+    :not(.status__language-name) {
+      text-decoration: underline;
+    }
+  }
+}
+
+.status__language-name {
+  text-align: end;
 }
 
 .notification__relative_time {
@@ -1727,7 +1764,7 @@ body > [data-popper-placement] {
     line-height: 24px;
 
     .emojione {
-      width: 24px;
+      width: auto;
       height: 24px;
       margin: -1px 0 0;
     }
@@ -1761,6 +1798,11 @@ body > [data-popper-placement] {
     width: 40px;
     height: 40px;
     color: $dark-text-color;
+  }
+
+  .reactions-bar__item__emoji {
+    height: 24px;
+    margin: 5px 0;
   }
 }
 
@@ -1923,7 +1965,7 @@ body > [data-popper-placement] {
   &__domain-pill {
     display: inline-flex;
     background: rgba($highlight-text-color, 0.2);
-    border-radius: 4px;
+    border-radius: 100vh;
     border: 0;
     color: $highlight-text-color;
     font-weight: 500;
@@ -1943,7 +1985,7 @@ body > [data-popper-placement] {
       box-shadow: var(--dropdown-shadow);
       max-width: 320px;
       padding: 16px;
-      border-radius: 8px;
+      border-radius: 23px;
       display: flex;
       flex-direction: column;
       gap: 24px;
@@ -1986,7 +2028,7 @@ body > [data-popper-placement] {
         background: rgba($highlight-text-color, 0.1);
         padding: 12px 8px;
         color: $highlight-text-color;
-        border-radius: 4px;
+        border-radius: 17px;
 
         &__label {
           font-size: 11px;
@@ -2147,6 +2189,10 @@ body > [data-popper-placement] {
     font-weight: 500;
     text-align: center;
   }
+
+  .account__avatar-composite & img {
+    border-radius: 2px;
+  }
 }
 
 a .account__avatar {
@@ -2175,7 +2221,7 @@ a .account__avatar {
 .explore__suggestions__card {
   .icon-button {
     border: 1px solid var(--background-border-color);
-    border-radius: 4px;
+    border-radius: 50%;
     box-sizing: content-box;
     padding: 5px;
 
@@ -2586,7 +2632,7 @@ a.account__display-name {
   backdrop-filter: var(--background-filter);
   border: 1px solid var(--dropdown-border-color);
   padding: 4px;
-  border-radius: 4px;
+  border-radius: 23px;
   box-shadow: var(--dropdown-shadow);
   z-index: 9999;
 
@@ -2687,7 +2733,7 @@ a.account__display-name {
     text-overflow: ellipsis;
     white-space: nowrap;
     text-align: inherit;
-    border-radius: 4px;
+    border-radius: 23px;
 
     &:focus,
     &:hover,
@@ -2873,12 +2919,12 @@ $ui-header-logo-wordmark-width: 99px;
   > .scrollable {
     border: 1px solid var(--background-border-color);
     border-top: 0;
-    border-radius: 0 0 4px 4px;
+    border-radius: 0 0 23px 23px;
 
     &.about,
     &.privacy-policy {
       border-top: 1px solid var(--background-border-color);
-      border-radius: 4px;
+      border-radius: 23px;
 
       @media screen and (max-width: $no-gap-breakpoint) {
         border-top: 0;
@@ -3598,7 +3644,7 @@ $ui-header-logo-wordmark-width: 99px;
   position: relative;
   overflow: hidden;
   display: flex;
-  border-radius: 4px;
+  border-radius: 23px;
   border: 1px solid var(--background-border-color);
 }
 
@@ -3648,7 +3694,7 @@ $ui-header-logo-wordmark-width: 99px;
   margin-bottom: 10px;
   display: flex;
   flex-direction: row;
-  border-radius: 4px;
+  border-radius: 23px;
   overflow: hidden;
 
   a:hover,
@@ -3701,7 +3747,7 @@ $ui-header-logo-wordmark-width: 99px;
   width: 100%;
   background: transparent;
   border: 1px solid var(--background-border-color);
-  border-radius: 4px 4px 0 0;
+  border-radius: 23px 23px 0 0;
   color: $highlight-text-color;
   cursor: pointer;
   flex: 0 0 auto;
@@ -4445,7 +4491,7 @@ a.status-card {
   display: flex;
   font-size: 16px;
   border: 1px solid var(--background-border-color);
-  border-radius: 4px 4px 0 0;
+  border-radius: 23px 23px 0 0;
   flex: 0 0 auto;
   cursor: pointer;
   position: relative;
@@ -4458,7 +4504,7 @@ a.status-card {
     gap: 5px;
     margin: 0;
     border: 0;
-    padding: 13px;
+    padding: 13px 19px;
     padding-inline-end: 0;
     color: inherit;
     background: transparent;
@@ -4535,7 +4581,7 @@ a.status-card {
   background: transparent;
   cursor: pointer;
   font-size: 16px;
-  padding: 0 15px;
+  padding: 0 21px;
 
   &:last-child {
     border-start-end-radius: 4px;
@@ -5176,7 +5222,8 @@ a.status-card {
   backdrop-filter: var(--background-filter);
   border: 1px solid var(--dropdown-border-color);
   box-shadow: var(--dropdown-shadow);
-  border-radius: 5px;
+  border-radius: 23px;
+  overflow: hidden;
 
   .emoji-mart-scroll {
     transition: opacity 200ms ease;
@@ -5374,7 +5421,7 @@ a.status-card {
   backdrop-filter: var(--background-filter);
   border: 1px solid var(--dropdown-border-color);
   padding: 4px;
-  border-radius: 4px;
+  border-radius: 23px;
   overflow: hidden;
   z-index: 2;
   width: 300px;
@@ -5406,7 +5453,7 @@ a.status-card {
   display: flex;
   align-items: center;
   gap: 12px;
-  border-radius: 4px;
+  border-radius: 19px;
   color: $primary-text-color;
 
   &:hover,
@@ -5510,7 +5557,7 @@ a.status-card {
         letter-spacing: 0.25px;
         font-weight: 500;
         padding: 8px 12px;
-        border-radius: 4px;
+        border-radius: 100vh;
         overflow: hidden;
         white-space: nowrap;
         text-overflow: ellipsis;
@@ -5557,7 +5604,7 @@ a.status-card {
     width: 100%;
     background: $ui-base-color;
     border: 1px solid var(--background-border-color);
-    border-radius: 0 0 4px 4px;
+    border-radius: 0 0 23px 23px;
     box-shadow: var(--dropdown-shadow);
     z-index: 99;
     font-size: 13px;
@@ -5603,7 +5650,7 @@ a.status-card {
         color: $darker-text-color;
         padding: 10px;
         cursor: pointer;
-        border-radius: 4px;
+        border-radius: 100vh;
         text-align: start;
         text-overflow: ellipsis;
         overflow: hidden;
@@ -5646,7 +5693,7 @@ a.status-card {
 
   &.active {
     .search__input {
-      border-radius: 4px 4px 0 0;
+      border-radius: 23px 23px 0 0;
     }
 
     .search__popout {
@@ -6935,7 +6982,7 @@ a.status-card {
     line-height: 24px;
 
     .emojione {
-      width: 24px;
+      width: auto;
       height: 24px;
       margin: -1px 0 0;
     }
@@ -8273,7 +8320,7 @@ noscript {
 
       .icon-button {
         border: 1px solid lighten($ui-base-color, 12%);
-        border-radius: 4px;
+        border-radius: 50%;
         box-sizing: content-box;
         padding: 5px;
 
@@ -8304,7 +8351,7 @@ noscript {
       margin-bottom: 16px;
 
       .emojione {
-        width: 22px;
+        width: auto;
         height: 22px;
       }
 
@@ -8353,12 +8400,12 @@ noscript {
     .account__header__fields {
       margin: 0;
       margin-top: 16px;
-      border-radius: 4px;
+      border-radius: 23px;
       border: 1px solid var(--background-border-color);
 
       dl {
         display: block;
-        padding: 11px 16px;
+        padding: 11px 22px;
         border-bottom-color: var(--background-border-color);
       }
 
@@ -8396,13 +8443,13 @@ noscript {
         margin-inline: -1px;
 
         &:first-child {
-          border-top-left-radius: 4px;
-          border-top-right-radius: 4px;
+          border-top-left-radius: 23px;
+          border-top-right-radius: 23px;
         }
 
         &:last-child {
-          border-bottom-left-radius: 4px;
-          border-bottom-right-radius: 4px;
+          border-bottom-left-radius: 23px;
+          border-bottom-right-radius: 23px;
           margin-bottom: -1px;
         }
 
@@ -8825,14 +8872,14 @@ noscript {
 
     &__emoji {
       display: block;
-      margin: 3px 0;
-      width: 16px;
-      height: 16px;
+      margin: 4px 0;
+      width: auto;
+      height: 20px;
 
       img {
         display: block;
         margin: 0;
-        width: 100%;
+        width: auto;
         height: 100%;
         min-width: auto;
         min-height: auto;
@@ -9752,7 +9799,7 @@ noscript {
   position: relative;
   margin: 10px;
   margin-bottom: 5px;
-  border-radius: 8px;
+  border-radius: 23px;
   border: 1px solid $highlight-text-color;
   background: rgba($highlight-text-color, 0.15);
   overflow: hidden;
@@ -9955,7 +10002,7 @@ noscript {
 
   &__meta {
     border: 1px solid var(--background-border-color);
-    border-radius: 4px;
+    border-radius: 32px;
     display: flex;
     margin-bottom: 30px;
     font-size: 15px;
@@ -10077,14 +10124,14 @@ noscript {
       font-weight: 600;
       line-height: 22px;
       padding: 20px;
-      border-radius: 4px;
+      border-radius: 32px;
       border: 1px solid var(--background-border-color);
       color: $highlight-text-color;
       cursor: pointer;
     }
 
     &.active &__title {
-      border-radius: 4px 4px 0 0;
+      border-radius: 32px 32px 0 0;
     }
 
     &__body {
@@ -10093,6 +10140,7 @@ noscript {
       padding: 20px;
       font-size: 15px;
       line-height: 22px;
+      border-radius: 0 0 32px 32px;
     }
   }
 
@@ -10192,7 +10240,7 @@ noscript {
   text-transform: uppercase;
   margin-inline-start: 10px;
   cursor: pointer;
-  color: $blurple-300;
+  color: $uri-500;
   border-radius: 4px;
   padding: 0 4px;
 
@@ -10621,7 +10669,7 @@ noscript {
   background: var(--surface-background-color);
   border: 1px solid var(--background-border-color);
   border-top: 0;
-  border-radius: 0 0 8px 8px;
+  border-radius: 0 0 23px 23px;
   padding: 15px;
   display: flex;
   align-items: center;
@@ -10760,7 +10808,7 @@ noscript {
 
     &__status {
       border: 1px solid var(--background-border-color);
-      border-radius: 8px;
+      border-radius: 17px;
       padding: 8px;
     }
 
@@ -10842,7 +10890,7 @@ noscript {
     font-weight: 700;
     flex: 1 1 auto;
     padding: 5px 12px;
-    border-radius: 4px;
+    border-radius: 23px;
   }
 }
 
@@ -11121,8 +11169,8 @@ noscript {
   background: rgba($ui-highlight-color, 0.05);
   color: $secondary-text-color;
   border: 1px solid rgba($ui-highlight-color, 0.15);
-  border-radius: 8px;
-  padding: 8px (5px + 8px);
+  border-radius: 23px;
+  padding: 13px (5px + 13px);
   position: relative;
   font-size: 15px;
   line-height: 22px;
