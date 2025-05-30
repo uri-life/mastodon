@@ -64,8 +64,8 @@ class MediaAttachment < ApplicationRecord
   AUDIO_MIME_TYPES             = %w(audio/wave audio/wav audio/x-wav audio/x-pn-wave audio/vnd.wave audio/ogg audio/vorbis audio/mpeg audio/mp3 audio/webm audio/flac audio/aac audio/m4a audio/x-m4a audio/mp4 audio/3gpp video/x-ms-asf).freeze
 
   BLURHASH_OPTIONS = {
-    x_comp: 4,
-    y_comp: 4,
+    x_comp: 6,
+    y_comp: 6,
   }.freeze
 
   IMAGE_STYLES = {
@@ -93,7 +93,7 @@ class MediaAttachment < ApplicationRecord
   }.freeze
 
   VIDEO_FORMAT = {
-    format: 'mp4',
+    format: 'm4v',
     content_type: 'video/mp4',
     vfr_frame_rate_threshold: MAX_VIDEO_FRAME_RATE,
     convert_options: {
@@ -148,12 +148,14 @@ class MediaAttachment < ApplicationRecord
 
   AUDIO_STYLES = {
     original: {
-      format: 'mp3',
-      content_type: 'audio/mpeg',
+      format: 'm4a',
+      content_type: 'audio/mp4',
       convert_options: {
         output: {
           'loglevel' => 'fatal',
-          'q:a' => 2,
+          'movflags' => 'faststart', # Move metadata to start of file so playback can begin before download finishes
+          'c:a' => 'aac',
+          'b:a' => '256k',
         }.freeze,
       }.freeze,
     }.freeze,
