@@ -76,10 +76,6 @@ export const LinkFooter: React.FC<{
           <FormattedMessage id='footer.about' defaultMessage='About' />
         </a>
         <DividingCircle />
-        <a href='https://joinmastodon.org/apps' target='_blank' rel='noopener'>
-          <FormattedMessage id='footer.get_app' defaultMessage='Get the app' />
-        </a>
-        <DividingCircle />
         <Link to='/keyboard-shortcuts'>
           <FormattedMessage
             id='footer.keyboard_shortcuts'
