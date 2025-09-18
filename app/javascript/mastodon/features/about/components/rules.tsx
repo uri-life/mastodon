@@ -52,7 +52,7 @@ export const RulesSection: FC<RulesSectionProps> = ({ isLoading = false }) => {
 
   if (rules.length === 0) {
     return (
-      <Section title={intl.formatMessage(messages.rules)}>
+      <Section open title={intl.formatMessage(messages.rules)}>
         <p>
           <FormattedMessage
             id='about.not_available'
@@ -64,7 +64,7 @@ export const RulesSection: FC<RulesSectionProps> = ({ isLoading = false }) => {
   }
 
   return (
-    <Section title={intl.formatMessage(messages.rules)}>
+    <Section open title={intl.formatMessage(messages.rules)}>
       <ol className='rules-list'>
         {rules.map((rule) => (
           <li key={rule.id}>
