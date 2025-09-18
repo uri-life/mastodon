@@ -156,7 +156,13 @@ a.table-action-link {
     .batch-table__toolbar {
       position: static;
       height: 4px;
-      border-bottom: none;
+      border: 0;
+    }
+
+    .batch-table__row {
+      &:first-child {
+        border: 1px solid var(--background-border-color);
+      }
     }
   }
 
@@ -198,7 +204,7 @@ a.table-action-link {
     z-index: 1;
     border: 1px solid var(--background-border-color);
     background: var(--background-color);
-    border-radius: 4px 4px 0 0;
+    border-radius: 23px 23px 0 0;
     height: 47px;
     align-items: center;
 
@@ -280,8 +286,12 @@ a.table-action-link {
       }
     }
 
+    &:first-child {
+      border-radius: 23px 23px 0 0;
+    }
+
     &:last-child {
-      border-radius: 0 0 4px 4px;
+      border-radius: 0 0 23px 23px;
     }
 
     &__content {
