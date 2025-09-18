@@ -35,10 +35,10 @@ class Tag < ApplicationRecord
   has_one :trend, class_name: 'TagTrend', inverse_of: :tag, dependent: :destroy
 
   HASHTAG_SEPARATORS = "_\u00B7\u30FB\u200c"
-  HASHTAG_FIRST_SEQUENCE_CHUNK_ONE = "[[:word:]_][[:word:]#{HASHTAG_SEPARATORS}]*[[:alpha:]#{HASHTAG_SEPARATORS}]".freeze
+  HASHTAG_FIRST_SEQUENCE_CHUNK_ONE = "[[:word:]_][[:word:]#{HASHTAG_SEPARATORS}]*[[:word:]#{HASHTAG_SEPARATORS}]".freeze
   HASHTAG_FIRST_SEQUENCE_CHUNK_TWO = "[[:word:]#{HASHTAG_SEPARATORS}]*[[:word:]_]".freeze
   HASHTAG_FIRST_SEQUENCE = "(#{HASHTAG_FIRST_SEQUENCE_CHUNK_ONE}#{HASHTAG_FIRST_SEQUENCE_CHUNK_TWO})".freeze
-  HASHTAG_LAST_SEQUENCE = '([[:word:]_]*[[:alpha:]][[:word:]_]*)'
+  HASHTAG_LAST_SEQUENCE = '([[:word:]_]*)'
   HASHTAG_NAME_PAT = "#{HASHTAG_FIRST_SEQUENCE}|#{HASHTAG_LAST_SEQUENCE}".freeze
 
   HASHTAG_RE = %r{(?<![=/)\p{Alnum}])#(#{HASHTAG_NAME_PAT})}
