@@ -400,11 +400,13 @@ class Status extends ImmutablePureComponent {
     };
 
     let media, statusAvatar, prepend, rebloggedByText;
+    let statusLanguage;
 
     const connectUp = previousId && previousId === status.get('in_reply_to_id');
     const connectToRoot = rootId && rootId === status.get('in_reply_to_id');
     const connectReply = nextInReplyToId && nextInReplyToId === status.get('id');
     const matchedFilters = status.get('matched_filters');
+    const language = status.get('language');
 
     if (status.get('reblog', null) !== null && typeof status.get('reblog') === 'object') {
       const display_name_html = { __html: status.getIn(['account', 'display_name_html']) };
@@ -540,6 +542,24 @@ class Status extends ImmutablePureComponent {
       statusAvatar = <AvatarOverlay account={status.get('account')} friend={account} />;
     }
 
+    if (language !== undefined && language !== null && Intl !== undefined) {
+      try {
+        statusLanguage = (
+          <div className='status__language-name' aria-hidden='true'>
+            {new Intl.DisplayNames([intl.locale], { type: 'language' }).of(language)}
+          </div>
+        );
+      } catch {
+        statusLanguage = (
+          <div className='status__language-name' aria-hidden='true'>
+            {language}
+          </div>
+        );
+      }
+    } else {
+      statusLanguage = null;
+    }
+
     const {statusContentProps, hashtagBar} = getHashtagBarForStatus(status);
 
     return (
@@ -566,6 +586,7 @@ class Status extends ImmutablePureComponent {
               <Link to={`/@${status.getIn(['account', 'acct'])}/${status.get('id')}`} className='status__relative-time'>
                 <span className='status__visibility-icon'><VisibilityIcon visibility={status.get('visibility')} /></span>
                 <RelativeTimestamp timestamp={status.get('created_at')} />{status.get('edited_at') && <abbr title={intl.formatMessage(messages.edited, { date: intl.formatDate(status.get('edited_at'), { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' }) })}> *</abbr>}
+                {statusLanguage}
               </Link>
 
               <Link to={`/@${status.getIn(['account', 'acct'])}`} title={status.getIn(['account', 'acct'])} data-hover-card-account={status.getIn(['account', 'id'])} className='status__display-name'>

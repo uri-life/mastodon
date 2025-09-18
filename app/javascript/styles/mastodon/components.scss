@@ -1560,6 +1560,15 @@ body > [data-popper-placement] {
   order: 2;
   flex: 0 0 auto;
   color: $dark-text-color;
+  text-align: end;
+
+  &:hover {
+    text-decoration: none !important;
+
+    :not(.status__language-name) {
+      text-decoration: underline;
+    }
+  }
 }
 
 .notification__relative_time {
