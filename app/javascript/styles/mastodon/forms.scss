@@ -14,7 +14,7 @@ code {
 }
 
 .form-section {
-  border-radius: 8px;
+  border-radius: 23px;
   background: var(--surface-background-color);
   padding: 24px;
   margin-bottom: 24px;
@@ -522,7 +522,7 @@ code {
     resize: vertical;
     background: $ui-base-color;
     border: 1px solid var(--background-border-color);
-    border-radius: 4px;
+    border-radius: 23px;
     padding: 10px 16px;
 
     &:invalid {
@@ -577,7 +577,7 @@ code {
   }
 
   .actions {
-    margin-top: 30px;
+    margin-top: 50px;
     display: flex;
     gap: 10px;
 
@@ -599,13 +599,14 @@ code {
     display: block;
     width: 100%;
     border: 0;
-    border-radius: 4px;
+    border-radius: 23px;
     background: $ui-button-background-color;
     color: $ui-button-color;
     font-size: 15px;
     line-height: 22px;
     height: auto;
-    padding: 7px 18px;
+    min-height: 46px;
+    padding: 10px 16px;
     text-decoration: none;
     text-align: center;
     box-sizing: border-box;
@@ -653,10 +654,10 @@ code {
       url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14.933 18.467' height='19.698' width='15.929'><path d='M3.467 14.967l-3.393-3.5H14.86l-3.392 3.5c-1.866 1.925-3.666 3.5-4 3.5-.335 0-2.135-1.575-4-3.5zm.266-11.234L7.467 0 11.2 3.733l3.733 3.734H0l3.733-3.734z' fill='#{hex-color(lighten($ui-base-color, 12%))}'/></svg>")
       no-repeat right 8px center / auto 14px;
     border: 1px solid var(--background-border-color);
-    border-radius: 4px;
-    padding-inline-start: 10px;
-    padding-inline-end: 30px;
-    height: 41px;
+    border-radius: 23px;
+    padding-inline-start: 20px;
+    padding-inline-end: 40px;
+    height: 46px;
 
     @media screen and (width <= 600px) {
       font-size: 16px;
@@ -727,8 +728,8 @@ code {
   background: var(--background-color);
   color: $highlight-text-color;
   border: 1px solid $highlight-text-color;
-  border-radius: 4px;
-  padding: 15px 10px;
+  border-radius: 25px;
+  padding: 15px 20px;
   margin-bottom: 30px;
   text-align: center;
 
@@ -843,15 +844,15 @@ code {
     border-top-width: 0;
 
     &:first-child {
-      border-radius: 4px 4px 0 0;
+      border-radius: 25px 25px 0 0;
       border-top-width: 1px;
     }
 
     &:last-child {
-      border-radius: 0 0 4px 4px;
+      border-radius: 0 0 25px 25px;
 
       &:first-child {
-        border-radius: 4px;
+        border-radius: 25px 25px 0 0;
       }
     }
   }
@@ -1083,10 +1084,10 @@ code {
 .input-copy {
   background: darken($ui-base-color, 10%);
   border: 1px solid darken($ui-base-color, 14%);
-  border-radius: 4px;
+  border-radius: 100vh;
   display: flex;
   align-items: center;
-  padding-inline-end: 4px;
+  padding-inline-start: 4px;
   position: relative;
   top: 1px;
   transition: border-color 300ms linear;
