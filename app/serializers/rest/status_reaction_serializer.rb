@@ -1,16 +1,30 @@
 # frozen_string_literal: true
 
-class REST::ReactionSerializer < ActiveModel::Serializer
+class REST::StatusReactionSerializer < ActiveModel::Serializer
   include RoutingHelper
 
-  attributes :name, :count
+  attributes :name
 
-  attribute :me, if: :current_user?
+  attribute :id, if: :exclude_count?
+  attribute :me, if: :include_me?
   attribute :url, if: :custom_emoji?
   attribute :static_url, if: :custom_emoji?
+  attribute :count, unless: :exclude_count?
 
-  def count
-    object.respond_to?(:count) ? object.count : 0
+  belongs_to :account, serializer: REST::AccountSerializer, if: :include_account?
+
+  delegate :count, to: :object
+
+  def include_me?
+    !exclude_count? && current_user?
+  end
+
+  def include_account?
+    instance_options[:include_account]
+  end
+
+  def exclude_count?
+    instance_options[:exclude_count] || !object.respond_to?(:count)
   end
 
   def current_user?
