@@ -15,11 +15,17 @@ namespace :api, format: false do
       scope module: :statuses do
         resources :reblogged_by, controller: :reblogged_by_accounts, only: :index
         resources :favourited_by, controller: :favourited_by_accounts, only: :index
+        resources :reactions, controller: :reactions, only: :index
         resource :reblog, only: :create
         post :unreblog, to: 'reblogs#destroy'
 
         resource :favourite, only: :create
         post :unfavourite, to: 'favourites#destroy'
+
+        # foreign custom emojis are encoded as shortcode@domain.tld
+        # the constraint prevents rails from interpreting the ".tld" as a filename extension
+        post '/react/:id', to: 'reactions#create', constraints: { id: %r{[^/]+} }
+        post '/unreact/:id', to: 'reactions#destroy', constraints: { id: %r{[^/]+} }
 
         resource :bookmark, only: :create
         post :unbookmark, to: 'bookmarks#destroy'
