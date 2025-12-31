@@ -5,6 +5,7 @@
 .gitattributes
 .gitignore
 .github
+.woodpecker
 public/system
 public/assets
 public/packs
