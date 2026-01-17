@@ -1481,6 +1481,7 @@ body > [data-popper-placement] {
 
     .status__content,
     .status__action-bar,
+    .reactions-bar,
     .media-gallery,
     .video-player,
     .audio-player,
@@ -4863,6 +4864,10 @@ a.status-card {
 .detailed-status__button {
   flex: 1 1 auto;
   text-align: center;
+}
+
+.detailed-status__button .emoji-button {
+  padding: 0;
 }
 
 .column-settings {
@@ -8804,6 +8809,8 @@ noscript {
   }
 
   &--empty {
+    margin-top: 0;
+
     .emoji-button {
       padding: 0;
     }
@@ -10632,6 +10639,10 @@ noscript {
     color: $gold-star;
   }
 
+  &--reaction &__icon {
+    color: $highlight-text-color;
+  }
+
   &--reblog &__icon {
     color: $valid-value-color;
   }
@@ -10840,6 +10851,7 @@ noscript {
 
   .status__content,
   .status__action-bar,
+  .reactions-bar,
   .media-gallery,
   .video-player,
   .audio-player,
