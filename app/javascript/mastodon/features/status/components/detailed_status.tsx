@@ -27,10 +27,12 @@ import MediaGallery from 'mastodon/components/media_gallery';
 import { PictureInPicturePlaceholder } from 'mastodon/components/picture_in_picture_placeholder';
 import StatusContent from 'mastodon/components/status_content';
 import { QuotedStatus } from 'mastodon/components/status_quoted';
+import { StatusReactions } from 'mastodon/components/status_reactions';
 import { VisibilityIcon } from 'mastodon/components/visibility_icon';
 import { Audio } from 'mastodon/features/audio';
 import scheduleIdleTask from 'mastodon/features/ui/util/schedule_idle_task';
 import { Video } from 'mastodon/features/video';
+import { useIdentity } from 'mastodon/identity_context';
 
 import Card from './card';
 
@@ -54,6 +56,8 @@ export const DetailedStatus: React.FC<{
   pictureInPicture: any;
   onToggleHidden?: (status: any) => void;
   onToggleMediaVisibility?: () => void;
+  onReactionAdd?: (status: any, name: string, url: string) => void;
+  onReactionRemove?: (status: any, name: string) => void;
 }> = ({
   status,
   onOpenMedia,
@@ -68,11 +72,15 @@ export const DetailedStatus: React.FC<{
   pictureInPicture,
   onToggleMediaVisibility,
   onToggleHidden,
+  onReactionAdd,
+  onReactionRemove,
 }) => {
   const properStatus = status?.get('reblog') ?? status;
   const [height, setHeight] = useState(0);
   const [showDespiteFilter, setShowDespiteFilter] = useState(false);
   const nodeRef = useRef<HTMLDivElement>();
+
+  const { signedIn } = useIdentity();
 
   const handleOpenVideo = useCallback(
     (options: VideoModalOptions) => {
@@ -389,6 +397,14 @@ export const DetailedStatus: React.FC<{
             )}
           </>
         )}
+
+        <StatusReactions
+          statusId={status.get('id')}
+          reactions={status.get('reactions')}
+          addReaction={onReactionAdd}
+          removeReaction={onReactionRemove}
+          canReact={signedIn}
+        />
 
         <div className='detailed-status__meta'>
           <div className='detailed-status__meta__line'>
