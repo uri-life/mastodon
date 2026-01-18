@@ -102,7 +102,7 @@
 
 // Change the background colors of statuses
 .focusable:focus-visible {
-  background: lighten($white, 4%);
+  background: lighten(hsl(210deg, 16%, 96%), 4%);
 }
 
 .account-gallery__item a {
