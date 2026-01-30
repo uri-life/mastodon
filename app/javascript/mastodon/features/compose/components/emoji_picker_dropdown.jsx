@@ -381,7 +381,7 @@ class EmojiPickerDropdown extends PureComponent {
   };
 
   render() {
-    const { intl, onPickEmoji, onSkinTone, skinTone, frequentlyUsedEmojis, title } = this.props;
+    const { disabled, intl, onPickEmoji, onSkinTone, skinTone, frequentlyUsedEmojis, title } = this.props;
     const { active, loading, placement } = this.state;
 
     return (
@@ -390,6 +390,7 @@ class EmojiPickerDropdown extends PureComponent {
           title={title || intl.formatMessage(messages.emoji)}
           aria-expanded={active}
           active={active}
+          disabled={disabled}
           iconComponent={MoodIcon}
           onClick={this.onToggle}
         />
