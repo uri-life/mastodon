@@ -28,7 +28,7 @@ import { WithRouterPropTypes } from 'mastodon/utils/react_router';
 
 import { Dropdown } from 'mastodon/components/dropdown_menu';
 import EmojiPickerDropdown from '../features/compose/containers/emoji_picker_dropdown_container';
-import { me, maxReactions } from '../initial_state';
+import { me } from '../initial_state';
 
 import { IconButton } from './icon_button';
 
@@ -377,7 +377,7 @@ class StatusActionBar extends ImmutablePureComponent {
       reblogIconComponent = RepeatDisabledIcon;
     }
 
-    const canReact = permissions && status.get('reactions').filter(r => r.get('count') > 0 && r.get('me')).size < maxReactions;
+    const canReact = permissions && status.get('reactions').filter(r => r.get('count') > 0 && r.get('me')).size < 1;
     const bookmarkTitle = intl.formatMessage(status.get('bookmarked') ? messages.removeBookmark : messages.bookmark);
     const favouriteTitle = intl.formatMessage(status.get('favourited') ? messages.removeFavourite : messages.favourite);
     const isReply = status.get('in_reply_to_account_id') === status.getIn(['account', 'id']);
