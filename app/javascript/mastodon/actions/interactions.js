@@ -631,8 +631,7 @@ export const addReactionFail = (statusId, name, error) => ({
 export const removeReaction = (statusId, name) => (dispatch, getState) => {
   dispatch(removeReactionRequest(statusId, name));
 
-  api(getState).post(`/api/v1/statuses/${statusId}/unreact/${encodeURIComponent(name)}`).then((response) => {
-    dispatch(importFetchedStatus(response.data));
+  api(getState).post(`/api/v1/statuses/${statusId}/unreact/${encodeURIComponent(name)}`).then(() => {
     dispatch(removeReactionSuccess(statusId, name));
   }).catch(err => {
     dispatch(removeReactionFail(statusId, name, err));
