@@ -1,4 +1,5 @@
-@use '../fonts/inter';
+@use '../fonts/pretendardvariable';
+@use '../fonts/pretendardvariable-jp';
 
 body {
   accent-color: #6364ff;
@@ -21,7 +22,8 @@ h6 {
   background-color: transparent;
   padding: 0;
   border: none;
-  font-family: Inter, 'Lucida Grande', sans-serif;
+  font-family: 'Pretendard Variable', 'Pretendard JP Variable', 'Lucida Grande',
+    sans-serif;
 }
 
 img {

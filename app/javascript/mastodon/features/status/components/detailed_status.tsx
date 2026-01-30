@@ -6,7 +6,7 @@
 import type { CSSProperties } from 'react';
 import { useState, useRef, useCallback } from 'react';
 
-import { FormattedMessage } from 'react-intl';
+import { FormattedMessage, useIntl } from 'react-intl';
 
 import classNames from 'classnames';
 import { Link } from 'react-router-dom';
@@ -27,10 +27,12 @@ import MediaGallery from 'mastodon/components/media_gallery';
 import { PictureInPicturePlaceholder } from 'mastodon/components/picture_in_picture_placeholder';
 import StatusContent from 'mastodon/components/status_content';
 import { QuotedStatus } from 'mastodon/components/status_quoted';
+import { StatusReactions } from 'mastodon/components/status_reactions';
 import { VisibilityIcon } from 'mastodon/components/visibility_icon';
 import { Audio } from 'mastodon/features/audio';
 import scheduleIdleTask from 'mastodon/features/ui/util/schedule_idle_task';
 import { Video } from 'mastodon/features/video';
+import { useIdentity } from 'mastodon/identity_context';
 
 import Card from './card';
 
@@ -54,6 +56,8 @@ export const DetailedStatus: React.FC<{
   pictureInPicture: any;
   onToggleHidden?: (status: any) => void;
   onToggleMediaVisibility?: () => void;
+  onReactionAdd?: (status: any, name: string, url: string) => void;
+  onReactionRemove?: (status: any, name: string) => void;
 }> = ({
   status,
   onOpenMedia,
@@ -68,11 +72,15 @@ export const DetailedStatus: React.FC<{
   pictureInPicture,
   onToggleMediaVisibility,
   onToggleHidden,
+  onReactionAdd,
+  onReactionRemove,
 }) => {
   const properStatus = status?.get('reblog') ?? status;
   const [height, setHeight] = useState(0);
   const [showDespiteFilter, setShowDespiteFilter] = useState(false);
   const nodeRef = useRef<HTMLDivElement>();
+
+  const { signedIn } = useIdentity();
 
   const handleOpenVideo = useCallback(
     (options: VideoModalOptions) => {
@@ -120,6 +128,8 @@ export const DetailedStatus: React.FC<{
     if (onTranslate) onTranslate(status);
   }, [onTranslate, status]);
 
+  const intl = useIntl();
+
   if (!properStatus) {
     return null;
   }
@@ -128,6 +138,7 @@ export const DetailedStatus: React.FC<{
   let applicationLink;
   let reblogLink;
   let attachmentAspectRatio;
+  let statusLanguage;
 
   if (properStatus.get('media_attachments').getIn([0, 'type']) === 'video') {
     attachmentAspectRatio = `${properStatus.get('media_attachments').getIn([0, 'meta', 'original', 'width'])} / ${properStatus.get('media_attachments').getIn([0, 'meta', 'original', 'height'])}`;
@@ -155,6 +166,8 @@ export const DetailedStatus: React.FC<{
 
   const language =
     status.getIn(['translation', 'language']) || status.get('language');
+
+  const sourceLanguage: string | null | undefined = status.get('language');
 
   if (pictureInPicture.get('inUse')) {
     media = <PictureInPicturePlaceholder aspectRatio={attachmentAspectRatio} />;
@@ -251,6 +264,27 @@ export const DetailedStatus: React.FC<{
         </a>
       </>
     );
+  }
+
+  if (sourceLanguage !== undefined && sourceLanguage !== null) {
+    try {
+      statusLanguage = (
+        <>
+          ·
+          <span>
+            {new Intl.DisplayNames([intl.locale], { type: 'language' }).of(
+              sourceLanguage,
+            )}
+          </span>
+        </>
+      );
+    } catch {
+      statusLanguage = (
+        <>
+          ·<span>{sourceLanguage}</span>
+        </>
+      );
+    }
   }
 
   const visibilityLink = (
@@ -386,6 +420,14 @@ export const DetailedStatus: React.FC<{
           </>
         )}
 
+        <StatusReactions
+          statusId={status.get('id')}
+          reactions={status.get('reactions')}
+          addReaction={onReactionAdd}
+          removeReaction={onReactionRemove}
+          canReact={signedIn}
+        />
+
         <div className='detailed-status__meta'>
           <div className='detailed-status__meta__line'>
             <a
@@ -405,6 +447,7 @@ export const DetailedStatus: React.FC<{
             </a>
 
             {visibilityLink}
+            {statusLanguage}
             {applicationLink}
           </div>
 

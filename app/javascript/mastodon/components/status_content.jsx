@@ -116,6 +116,22 @@ class StatusContent extends PureComponent {
         link.addEventListener('click', this.onHashtagClick.bind(this, link.text), false);
         link.setAttribute('href', `/tags/${link.text.replace(/^#/, '')}`);
         link.setAttribute('data-menu-hashtag', this.props.status.getIn(['account', 'id']));
+        if (/^#(?:[0-9A-F]{3}|[0-9A-F]{6})$/i.test(link.textContent)) {
+          const color = link.textContent;
+          const isColorLight = (() => {
+            const toLinear = (value) => value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+            const luminance =
+              0.2126 * toLinear(parseInt(color.slice(1, 3), 16) / 255) +
+              0.7152 * toLinear(parseInt(color.slice(3, 5), 16) / 255) +
+              0.0722 * toLinear(parseInt(color.slice(5, 7), 16) / 255);
+            return luminance > 0.179;
+          })();
+          const colorSpan = document.createElement('span');
+          colorSpan.style.backgroundColor = color;
+          colorSpan.classList.add('color-box');
+          colorSpan.classList.add(isColorLight ? 'color-box--light' : 'color-box--dark');
+          link.parentElement.insertBefore(colorSpan, link);
+        }
       } else {
         link.setAttribute('title', link.href);
         link.classList.add('unhandled-link');

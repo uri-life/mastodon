@@ -12,6 +12,10 @@ $blurple-400: #7477fd; // Medium slate blue
 $blurple-300: #858afa; // Faded Blue
 $grey-600: hsl(240deg, 8%, 33%); // Trout
 $grey-100: hsl(240deg, 51%, 90%); // Topaz
+$uri-800: #4681ba;
+$uri-700: #598ec1;
+$uri-600: #6b9ac8;
+$uri-500: #7ea7cf;
 
 $success-green: #79bd9a !default; // Padua
 $error-red: $red-500 !default; // Cerise
@@ -21,10 +25,10 @@ $gold-star: #ca8f04 !default; // Dark Goldenrod
 $red-bookmark: $warning-red;
 
 // Values from the classic Mastodon UI
-$classic-base-color: hsl(240deg, 16%, 19%);
-$classic-primary-color: hsl(240deg, 29%, 70%);
-$classic-secondary-color: hsl(255deg, 25%, 88%);
-$classic-highlight-color: $blurple-500;
+$classic-base-color: hsl(210deg, 16%, 18%);
+$classic-primary-color: hsl(210deg, 29%, 65%);
+$classic-secondary-color: hsl(224deg, 25%, 84%);
+$classic-highlight-color: $uri-700;
 
 // Variables for defaults in UI
 $base-shadow-color: $black !default;
@@ -44,9 +48,9 @@ $ui-primary-color: $classic-primary-color !default; // Lighter
 $ui-secondary-color: $classic-secondary-color !default; // Lightest
 $ui-highlight-color: $classic-highlight-color !default;
 $ui-button-color: $white !default;
-$ui-button-background-color: $blurple-500 !default;
-$ui-button-focus-background-color: $blurple-600 !default;
-$ui-button-focus-outline-color: $blurple-400 !default;
+$ui-button-background-color: $uri-700 !default;
+$ui-button-focus-background-color: $uri-800 !default;
+$ui-button-focus-outline-color: $uri-600 !default;
 $ui-button-focus-outline: solid 2px $ui-button-focus-outline-color !default;
 
 $ui-button-disabled-color: color.adjust(
@@ -54,14 +58,14 @@ $ui-button-disabled-color: color.adjust(
   $alpha: -0.3
 ) !default;
 
-$ui-button-secondary-color: $blurple-500 !default;
-$ui-button-secondary-border-color: $blurple-500 !default;
-$ui-button-secondary-focus-border-color: $blurple-300 !default;
-$ui-button-secondary-focus-color: $blurple-300 !default;
+$ui-button-secondary-color: $uri-700 !default;
+$ui-button-secondary-border-color: $uri-700 !default;
+$ui-button-secondary-focus-border-color: $uri-500 !default;
+$ui-button-secondary-focus-color: $uri-500 !default;
 
-$ui-button-tertiary-color: $blurple-300 !default;
-$ui-button-tertiary-border-color: $blurple-300 !default;
-$ui-button-tertiary-focus-background-color: $blurple-600 !default;
+$ui-button-tertiary-color: $uri-500 !default;
+$ui-button-tertiary-border-color: $uri-500 !default;
+$ui-button-tertiary-focus-background-color: $uri-800 !default;
 $ui-button-tertiary-focus-color: $white !default;
 
 $ui-button-destructive-background-color: $red-500 !default;
@@ -105,8 +109,8 @@ $mobile-menu-breakpoint: 760px;
 $mobile-breakpoint: 630px;
 $no-columns-breakpoint: 600px;
 
-$font-sans-serif: 'mastodon-font-sans-serif' !default;
-$font-display: 'mastodon-font-display' !default;
+$font-sans-serif: 'Pretendard Variable', 'Pretendard JP Variable' !default;
+$font-display: 'Pretendard Variable', 'Pretendard JP Variable' !default;
 $font-monospace: 'mastodon-font-monospace' !default;
 
 $emojis-requiring-inversion: 'back' 'copyright' 'curly_loop' 'currency_exchange'

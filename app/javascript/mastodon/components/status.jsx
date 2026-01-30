@@ -16,6 +16,7 @@ import { ContentWarning } from 'mastodon/components/content_warning';
 import { FilterWarning } from 'mastodon/components/filter_warning';
 import { Icon }  from 'mastodon/components/icon';
 import { PictureInPicturePlaceholder } from 'mastodon/components/picture_in_picture_placeholder';
+import { identityContextPropShape, withIdentity } from 'mastodon/identity_context';
 import { withOptionalRouter, WithOptionalRouterPropTypes } from 'mastodon/utils/react_router';
 
 import Card from '../features/status/components/card';
@@ -33,6 +34,7 @@ import { getHashtagBarForStatus } from './hashtag_bar';
 import { RelativeTimestamp } from './relative_timestamp';
 import StatusActionBar from './status_action_bar';
 import StatusContent from './status_content';
+import { StatusReactions } from './status_reactions';
 import { StatusThreadLabel } from './status_thread_label';
 import { VisibilityIcon } from './visibility_icon';
 
@@ -84,6 +86,7 @@ class Status extends ImmutablePureComponent {
   static contextType = SensitiveMediaContext;
 
   static propTypes = {
+    identity: identityContextPropShape,
     status: ImmutablePropTypes.map,
     account: ImmutablePropTypes.record,
     children: PropTypes.node,
@@ -97,6 +100,8 @@ class Status extends ImmutablePureComponent {
     onDelete: PropTypes.func,
     onDirect: PropTypes.func,
     onMention: PropTypes.func,
+    onReactionAdd: PropTypes.func,
+    onReactionRemove: PropTypes.func,
     onPin: PropTypes.func,
     onOpenMedia: PropTypes.func,
     onOpenVideo: PropTypes.func,
@@ -400,11 +405,13 @@ class Status extends ImmutablePureComponent {
     };
 
     let media, statusAvatar, prepend, rebloggedByText;
+    let statusLanguage;
 
     const connectUp = previousId && previousId === status.get('in_reply_to_id');
     const connectToRoot = rootId && rootId === status.get('in_reply_to_id');
     const connectReply = nextInReplyToId && nextInReplyToId === status.get('id');
     const matchedFilters = status.get('matched_filters');
+    const language = status.get('language');
 
     if (status.get('reblog', null) !== null && typeof status.get('reblog') === 'object') {
       const display_name_html = { __html: status.getIn(['account', 'display_name_html']) };
@@ -540,6 +547,24 @@ class Status extends ImmutablePureComponent {
       statusAvatar = <AvatarOverlay account={status.get('account')} friend={account} />;
     }
 
+    if (language !== undefined && language !== null && Intl !== undefined) {
+      try {
+        statusLanguage = (
+          <div className='status__language-name' aria-hidden='true'>
+            {new Intl.DisplayNames([intl.locale], { type: 'language' }).of(language)}
+          </div>
+        );
+      } catch {
+        statusLanguage = (
+          <div className='status__language-name' aria-hidden='true'>
+            {language}
+          </div>
+        );
+      }
+    } else {
+      statusLanguage = null;
+    }
+
     const {statusContentProps, hashtagBar} = getHashtagBarForStatus(status);
 
     return (
@@ -566,6 +591,7 @@ class Status extends ImmutablePureComponent {
               <Link to={`/@${status.getIn(['account', 'acct'])}/${status.get('id')}`} className='status__relative-time'>
                 <span className='status__visibility-icon'><VisibilityIcon visibility={status.get('visibility')} /></span>
                 <RelativeTimestamp timestamp={status.get('created_at')} />{status.get('edited_at') && <abbr title={intl.formatMessage(messages.edited, { date: intl.formatDate(status.get('edited_at'), { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' }) })}> *</abbr>}
+                {statusLanguage}
               </Link>
 
               <Link to={`/@${status.getIn(['account', 'acct'])}`} title={status.getIn(['account', 'acct'])} data-hover-card-account={status.getIn(['account', 'id'])} className='status__display-name'>
@@ -599,6 +625,14 @@ class Status extends ImmutablePureComponent {
               </>
             )}
 
+            <StatusReactions
+              statusId={status.get('id')}
+              reactions={status.get('reactions')}
+              addReaction={this.props.onReactionAdd}
+              removeReaction={this.props.onReactionRemove}
+              canReact={this.props.identity.signedIn}
+            />
+
             {!isQuotedPost &&
               <StatusActionBar scrollKey={scrollKey} status={status} account={account}  {...other} />
             }
@@ -610,4 +644,4 @@ class Status extends ImmutablePureComponent {
 
 }
 
-export default withOptionalRouter(injectIntl(Status));
+export default withOptionalRouter(injectIntl(withIdentity(Status)));

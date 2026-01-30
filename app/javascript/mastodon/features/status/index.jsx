@@ -43,6 +43,8 @@ import {
   toggleReblog,
   pin,
   unpin,
+  addReaction,
+  removeReaction,
 } from '../../actions/interactions';
 import { openModal } from '../../actions/modal';
 import { initMuteModal } from '../../actions/mutes';
@@ -192,6 +194,19 @@ class Status extends ImmutablePureComponent {
         },
       }));
     }
+  };
+
+  handleReactionAdd = (statusId, name, url) => {
+    const { dispatch, identity } = this.props;
+    const { signedIn } = identity;
+
+    if (signedIn) {
+      dispatch(addReaction(statusId, name, url));
+    }
+  };
+
+  handleReactionRemove = (statusId, name) => {
+    this.props.dispatch(removeReaction(statusId, name));
   };
 
   handlePin = (status) => {
@@ -623,6 +638,8 @@ class Status extends ImmutablePureComponent {
                   status={status}
                   onOpenVideo={this.handleOpenVideo}
                   onOpenMedia={this.handleOpenMedia}
+                  onReactionAdd={this.handleReactionAdd}
+                  onReactionRemove={this.handleReactionRemove}
                   onToggleHidden={this.handleToggleHidden}
                   onTranslate={this.handleTranslate}
                   domain={domain}
@@ -636,6 +653,7 @@ class Status extends ImmutablePureComponent {
                   status={status}
                   onReply={this.handleReplyClick}
                   onFavourite={this.handleFavouriteClick}
+                  onReactionAdd={this.handleReactionAdd}
                   onReblog={this.handleReblogClick}
                   onBookmark={this.handleBookmarkClick}
                   onDelete={this.handleDeleteClick}

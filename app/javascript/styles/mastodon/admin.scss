@@ -222,8 +222,8 @@ $content-width: 840px;
           font-size: 14px;
           display: inline-flex;
           align-items: center;
-          padding: 7px 10px;
-          border-radius: 4px;
+          padding: 7px 12px;
+          border-radius: 100vh;
           color: $darker-text-color;
           text-decoration: none;
           font-weight: 500;
@@ -1009,7 +1009,7 @@ a.name-tag,
   padding: 15px 0;
   background: var(--background-color);
   border: 1px solid var(--background-border-color);
-  border-radius: 4px;
+  border-radius: 33px;
   margin-top: 15px;
 }
 
@@ -1026,12 +1026,15 @@ a.name-tag,
 .announcements-list,
 .filters-list {
   border: 1px solid var(--background-border-color);
-  border-radius: 4px;
-  border-bottom: none;
+  border-radius: 23px;
 
   &__item {
     padding: 15px 0;
     border-bottom: 1px solid var(--background-border-color);
+
+    &:last-child {
+      border-bottom: 0;
+    }
 
     &__title {
       padding: 0 15px;
@@ -1197,7 +1200,7 @@ a.name-tag,
   display: block;
   text-decoration: none;
   background: var(--background-color);
-  border-radius: 4px;
+  border-radius: 23px;
   border: 1px solid var(--background-border-color);
   padding: 0;
   position: relative;

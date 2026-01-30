@@ -9,6 +9,7 @@ import ImmutablePropTypes from 'react-immutable-proptypes';
 import ImmutablePureComponent from 'react-immutable-pure-component';
 import { connect } from 'react-redux';
 
+import AddReactionIcon from '@/material-icons/400-24px/add_reaction.svg?react';
 import BookmarkIcon from '@/material-icons/400-24px/bookmark-fill.svg?react';
 import BookmarkBorderIcon from '@/material-icons/400-24px/bookmark.svg?react';
 import MoreHorizIcon from '@/material-icons/400-24px/more_horiz.svg?react';
@@ -26,6 +27,7 @@ import { PERMISSION_MANAGE_USERS, PERMISSION_MANAGE_FEDERATION } from 'mastodon/
 import { WithRouterPropTypes } from 'mastodon/utils/react_router';
 
 import { Dropdown } from 'mastodon/components/dropdown_menu';
+import EmojiPickerDropdown from '../features/compose/containers/emoji_picker_dropdown_container';
 import { me } from '../initial_state';
 
 import { IconButton } from './icon_button';
@@ -47,6 +49,7 @@ const messages = defineMessages({
   cancel_reblog_private: { id: 'status.cancel_reblog_private', defaultMessage: 'Unboost' },
   cannot_reblog: { id: 'status.cannot_reblog', defaultMessage: 'This post cannot be boosted' },
   favourite: { id: 'status.favourite', defaultMessage: 'Favorite' },
+  react: { id: 'status.react', defaultMessage: 'React' },
   removeFavourite: { id: 'status.remove_favourite', defaultMessage: 'Remove from favorites' },
   bookmark: { id: 'status.bookmark', defaultMessage: 'Bookmark' },
   removeBookmark: { id: 'status.remove_bookmark', defaultMessage: 'Remove bookmark' },
@@ -80,6 +83,7 @@ class StatusActionBar extends ImmutablePureComponent {
     relationship: ImmutablePropTypes.record,
     onReply: PropTypes.func,
     onFavourite: PropTypes.func,
+    onReactionAdd: PropTypes.func,
     onReblog: PropTypes.func,
     onDelete: PropTypes.func,
     onDirect: PropTypes.func,
@@ -149,6 +153,10 @@ class StatusActionBar extends ImmutablePureComponent {
     } else {
       this.props.onInteractionModal('reblog', this.props.status);
     }
+  };
+
+  handleEmojiPick = data => {
+    this.props.onReactionAdd(this.props.status.get('id'), data.native.replace(/:/g, ''), data.imageUrl);
   };
 
   handleBookmarkClick = () => {
@@ -369,7 +377,7 @@ class StatusActionBar extends ImmutablePureComponent {
       reblogIconComponent = RepeatDisabledIcon;
     }
 
-
+    const canReact = permissions && status.get('reactions').filter(r => r.get('count') > 0 && r.get('me')).size < 1;
     const bookmarkTitle = intl.formatMessage(status.get('bookmarked') ? messages.removeBookmark : messages.bookmark);
     const favouriteTitle = intl.formatMessage(status.get('favourited') ? messages.removeFavourite : messages.favourite);
     const isReply = status.get('in_reply_to_account_id') === status.getIn(['account', 'id']);
@@ -384,6 +392,9 @@ class StatusActionBar extends ImmutablePureComponent {
         </div>
         <div className='status__action-bar__button-wrapper'>
           <IconButton className='status__action-bar__button star-icon' animate active={status.get('favourited')} title={favouriteTitle} icon='star' iconComponent={status.get('favourited') ? StarIcon : StarBorderIcon} onClick={this.handleFavouriteClick} counter={withCounters ? status.get('favourites_count') : undefined} />
+        </div>
+        <div className='status__action-bar__button-wrapper'>
+          <EmojiPickerDropdown className='status__action-bar-button' onPickEmoji={this.handleEmojiPick} title={intl.formatMessage(messages.react)} icon={AddReactionIcon} disabled={!canReact} counter={withCounters ? status.get('reactions_count') : undefined} />
         </div>
         <div className='status__action-bar__button-wrapper'>
           <IconButton className='status__action-bar__button bookmark-icon' disabled={!signedIn} active={status.get('bookmarked')} title={bookmarkTitle} icon='bookmark' iconComponent={status.get('bookmarked') ? BookmarkIcon : BookmarkBorderIcon} onClick={this.handleBookmarkClick} />
