@@ -1,0 +1,209 @@
+# URI Mastodon 패치 빌드 워크플로우
+# 변경된 버전만 빌드하고, 최신 버전에는 latest 태그 부여
+# 각 플랫폼별 네이티브 머신에서 빌드
+
+variables:
+  - &registry 'ghcr.io'
+  - &organization 'uri-life'
+  - &repository-base 'mastodon'
+
+matrix:
+  platform:
+    - linux/amd64
+    - linux/arm64
+
+labels:
+  platform: ${platform}
+
+when:
+  - event: push
+    branch: main
+    path:
+      include:
+        - 'versions/**'
+        - 'manifest.yaml'
+
+steps:
+  # 변경된 버전 감지 및 최신 버전 판단
+  - name: detect-versions
+    image: alpine:latest
+    commands:
+      - apk add --no-cache git bash
+      - scripts/detect-versions.sh "../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
+
+  # upstream 클론 및 패치 도구 설치
+  - name: setup
+    image: alpine:latest
+    commands:
+      - apk add --no-cache git bash
+      - |
+        ENV_FILE="../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
+        source "$ENV_FILE"
+
+        if [ -z "$VERSIONS_TO_BUILD" ]; then
+          echo "빌드할 버전이 없습니다. 스킵합니다."
+          exit 0
+        fi
+
+        # manifest.yaml에서 upstream URL 추출
+        UPSTREAM_URL=$(grep 'upstream:' manifest.yaml | sed 's/upstream:[[:space:]]*//')
+        echo "Upstream URL: $UPSTREAM_URL"
+
+        # uri 도구 클론
+        echo "=== URI 도구 설치 ==="
+        git clone --depth=1 https://github.com/uri-life/uri.git ../uri
+        chmod +x ../uri/bin/uri
+
+        # upstream 클론 (태그 정보 포함)
+        echo "=== Upstream 클론 ==="
+        git clone "$UPSTREAM_URL" ../mastodon
+        cd ../mastodon
+        git fetch --tags
+
+        # 각 버전별로 패치 적용 (브랜치 생성됨: uri/vX.Y.Z/uriX.Y)
+        for VERSION_COMBO in $VERSIONS_TO_BUILD; do
+          MASTODON_VER=$(echo "$VERSION_COMBO" | cut -d: -f1)
+          URI_VER=$(echo "$VERSION_COMBO" | cut -d: -f2)
+
+          echo "=== 패치 적용: $MASTODON_VER + $URI_VER ==="
+          ../uri/bin/uri apply "$MASTODON_VER" "$URI_VER" .
+        done
+
+  # Docker 이미지 빌드
+  - name: build
+    image: docker:cli
+    commands:
+      - |
+        ENV_FILE="../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
+        source "$ENV_FILE"
+
+        if [ -z "$VERSIONS_TO_BUILD" ]; then
+          echo "빌드할 버전이 없습니다. 스킵합니다."
+          exit 0
+        fi
+
+        for VERSION_COMBO in $VERSIONS_TO_BUILD; do
+          MASTODON_VER=$(echo "$VERSION_COMBO" | cut -d: -f1)
+          URI_VER=$(echo "$VERSION_COMBO" | cut -d: -f2)
+
+          WORK_DIR="../mastodon"
+          BRANCH_NAME="uri/${MASTODON_VER}/${URI_VER}"
+          IMAGE_NAME="mastodon-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}-${MASTODON_VER}-${URI_VER}"
+          STREAMING_IMAGE_NAME="mastodon-streaming-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}-${MASTODON_VER}-${URI_VER}"
+
+          VERSION_METADATA="${URI_VER}"
+
+          echo "=== 빌드: $MASTODON_VER + $URI_VER (${platform}) ==="
+
+          cd "$WORK_DIR"
+          git checkout "$BRANCH_NAME"
+
+          # Mastodon 메인 이미지 빌드
+          docker build -t "${IMAGE_NAME}:latest" \
+            --build-arg MASTODON_VERSION_METADATA="$VERSION_METADATA" \
+            --build-arg GITHUB_REPOSITORY="${CI_REPO}" \
+            --build-arg SOURCE_TAG="${MASTODON_VER}+${URI_VER}" \
+            .
+
+          # Streaming 이미지 빌드
+          docker build -t "${STREAMING_IMAGE_NAME}:latest" \
+            --build-arg MASTODON_VERSION_METADATA="$VERSION_METADATA" \
+            --build-arg GITHUB_REPOSITORY="${CI_REPO}" \
+            --build-arg SOURCE_TAG="${MASTODON_VER}+${URI_VER}" \
+            -f streaming/Dockerfile \
+            .
+
+          cd -
+        done
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  # 이미지 태깅 및 푸시
+  - name: push
+    image: docker:cli
+    environment:
+      IMAGE_REGISTRY: *registry
+      IMAGE_ORGANIZATION: *organization
+      IMAGE_REPOSITORY_BASE: *repository-base
+      GITHUB_USERNAME:
+        from_secret: GITHUB_USERNAME
+      GITHUB_TOKEN:
+        from_secret: GITHUB_TOKEN
+    commands:
+      - |
+        ENV_FILE="../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
+        source "$ENV_FILE"
+
+        if [ -z "$VERSIONS_TO_BUILD" ]; then
+          echo "빌드할 버전이 없습니다. 스킵합니다."
+          exit 0
+        fi
+
+        # 레지스트리 로그인
+        echo "$GITHUB_TOKEN" | docker login "$IMAGE_REGISTRY" -u "$GITHUB_USERNAME" --password-stdin
+
+        PLATFORM_SHORT="${platform##*/}"
+
+        REGISTRY_IMAGE="${IMAGE_REGISTRY}/${IMAGE_ORGANIZATION}/${IMAGE_REPOSITORY_BASE}"
+        REGISTRY_STREAMING="${IMAGE_REGISTRY}/${IMAGE_ORGANIZATION}/${IMAGE_REPOSITORY_BASE}-streaming"
+
+        for VERSION_COMBO in $VERSIONS_TO_BUILD; do
+          MASTODON_VER=$(echo "$VERSION_COMBO" | cut -d: -f1)
+          URI_VER=$(echo "$VERSION_COMBO" | cut -d: -f2)
+
+          IMAGE_NAME="mastodon-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}-${MASTODON_VER}-${URI_VER}"
+          STREAMING_IMAGE_NAME="mastodon-streaming-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}-${MASTODON_VER}-${URI_VER}"
+
+          # 플랫폼별 태그: vX.Y.Z-uriX.Y-platform
+          BASE_TAG="${MASTODON_VER}-${URI_VER}-${PLATFORM_SHORT}"
+
+          echo "=== 푸시: $VERSION_COMBO (${platform}) ==="
+
+          # 플랫폼별 태그 푸시
+          docker image tag "${IMAGE_NAME}:latest" "${REGISTRY_IMAGE}:${BASE_TAG}"
+          docker image tag "${STREAMING_IMAGE_NAME}:latest" "${REGISTRY_STREAMING}:${BASE_TAG}"
+          docker image push "${REGISTRY_IMAGE}:${BASE_TAG}"
+          docker image push "${REGISTRY_STREAMING}:${BASE_TAG}"
+
+          # 최신 버전인 경우 플랫폼별 latest 태그 추가
+          if [ "$VERSION_COMBO" = "$LATEST_VERSION" ]; then
+            echo "=== 최신 버전입니다. latest-${PLATFORM_SHORT} 태그 추가 ==="
+            docker image tag "${IMAGE_NAME}:latest" "${REGISTRY_IMAGE}:latest-${PLATFORM_SHORT}"
+            docker image tag "${STREAMING_IMAGE_NAME}:latest" "${REGISTRY_STREAMING}:latest-${PLATFORM_SHORT}"
+            docker image push "${REGISTRY_IMAGE}:latest-${PLATFORM_SHORT}"
+            docker image push "${REGISTRY_STREAMING}:latest-${PLATFORM_SHORT}"
+          fi
+        done
+
+        docker logout "$IMAGE_REGISTRY"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  # 정리
+  - name: cleanup
+    image: docker:cli
+    commands:
+      - |
+        ENV_FILE="../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
+        source "$ENV_FILE"
+
+        if [ -z "$VERSIONS_TO_BUILD" ]; then
+          exit 0
+        fi
+
+        for VERSION_COMBO in $VERSIONS_TO_BUILD; do
+          MASTODON_VER=$(echo "$VERSION_COMBO" | cut -d: -f1)
+          URI_VER=$(echo "$VERSION_COMBO" | cut -d: -f2)
+
+          IMAGE_NAME="mastodon-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}-${MASTODON_VER}-${URI_VER}"
+          STREAMING_IMAGE_NAME="mastodon-streaming-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}-${MASTODON_VER}-${URI_VER}"
+
+          docker image rm "${IMAGE_NAME}:latest" || true
+          docker image rm "${STREAMING_IMAGE_NAME}:latest" || true
+        done
+
+        rm -f "$ENV_FILE"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    when:
+      - status: [success, failure]
