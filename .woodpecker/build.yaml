@@ -23,7 +23,7 @@ when:
         - 'versions/**'
         - 'manifest.yaml'
   - event: tag
-    evaluate: 'CI_COMMIT_TAG matches "v[0-9]+\\.[0-9]+\\.[0-9]+([^+]+)?\\+uri[0-9]+\\.[0-9]+"'
+    evaluate: 'CI_COMMIT_TAG matches "v[0-9]+\\\\.[0-9]+\\\\.[0-9]+([^+]+)?\\\\+uri[0-9]+\\\\.[0-9]+"'
   - event: manual
     branch: main
 
