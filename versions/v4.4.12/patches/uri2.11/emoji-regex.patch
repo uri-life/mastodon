@@ -1,0 +1,57 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Wed, 9 Oct 2024 19:36:01 +0900
+Subject: [PATCH] Restrict pattern to match only `0-9A-Za-z` characters
+
+
+diff --git a/app/lib/emoji_formatter.rb b/app/lib/emoji_formatter.rb
+index c193df9bb6..2f1cd1f72a 100644
+--- a/app/lib/emoji_formatter.rb
++++ b/app/lib/emoji_formatter.rb
+@@ -3,7 +3,7 @@
+ class EmojiFormatter
+   include RoutingHelper
+ 
+-  DISALLOWED_BOUNDING_REGEX = /[[:alnum:]:]/
++  DISALLOWED_BOUNDING_REGEX = /[0-9A-Za-z_]/
+ 
+   attr_reader :html, :custom_emojis, :options
+ 
+diff --git a/app/models/custom_emoji.rb b/app/models/custom_emoji.rb
+index 96abcc16c8..f6161d1f51 100644
+--- a/app/models/custom_emoji.rb
++++ b/app/models/custom_emoji.rb
+@@ -29,11 +29,11 @@ class CustomEmoji < ApplicationRecord
+   MAX_SHORTCODE_SIZE = 128
+   MAX_FEDERATED_SHORTCODE_SIZE = 2048
+ 
+-  SHORTCODE_RE_FRAGMENT = '[a-zA-Z0-9_]{2,}'
++  SHORTCODE_RE_FRAGMENT = '[0-9A-Za-z_]+'
+ 
+-  SCAN_RE = /(?<=[^[:alnum:]:]|\n|^)
++  SCAN_RE = /(?<=[^0-9A-Za-z]|\n|^)
+     :(#{SHORTCODE_RE_FRAGMENT}):
+-    (?=[^[:alnum:]:]|$)/x
++    (?=[^0-9A-Za-z_]|$)/x
+   SHORTCODE_ONLY_RE = /\A#{SHORTCODE_RE_FRAGMENT}\z/
+ 
+   IMAGE_MIME_TYPES = %w(image/png image/gif image/webp).freeze
+diff --git a/spec/lib/emoji_formatter_spec.rb b/spec/lib/emoji_formatter_spec.rb
+index e5accfbb0c..f83bc96d55 100644
+--- a/spec/lib/emoji_formatter_spec.rb
++++ b/spec/lib/emoji_formatter_spec.rb
+@@ -38,14 +38,6 @@ RSpec.describe EmojiFormatter do
+       end
+     end
+ 
+-    context 'when given text with concatenated emoji shortcodes' do
+-      let(:text) { preformat_text(':coolcat::coolcat:') }
+-
+-      it 'does not touch the shortcodes' do
+-        expect(subject).to match(/:coolcat::coolcat:/)
+-      end
+-    end
+-
+     context 'when given text with an emoji shortcode at the end' do
+       let(:text) { preformat_text('Beep boop :coolcat:') }
+ 

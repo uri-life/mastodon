@@ -1,0 +1,19 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Thu, 12 Dec 2024 23:13:16 +0900
+Subject: [PATCH] Increase emoji file size limit to 1MB
+
+
+diff --git a/app/models/custom_emoji.rb b/app/models/custom_emoji.rb
+index 96abcc16c8..a4f8644284 100644
+--- a/app/models/custom_emoji.rb
++++ b/app/models/custom_emoji.rb
+@@ -24,7 +24,7 @@
+ class CustomEmoji < ApplicationRecord
+   include Attachmentable
+ 
+-  LIMIT = 256.kilobytes
++  LIMIT = 1.megabyte
+   MINIMUM_SHORTCODE_SIZE = 2
+   MAX_SHORTCODE_SIZE = 128
+   MAX_FEDERATED_SHORTCODE_SIZE = 2048

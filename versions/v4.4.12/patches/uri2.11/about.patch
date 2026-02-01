@@ -1,0 +1,113 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Thu, 18 Sep 2025 06:01:38 +0000
+Subject: [PATCH 1/3] Change default to expanded for server rules section
+
+
+diff --git a/app/javascript/mastodon/features/about/components/rules.tsx b/app/javascript/mastodon/features/about/components/rules.tsx
+index e413adb310..8effe8b6e7 100644
+--- a/app/javascript/mastodon/features/about/components/rules.tsx
++++ b/app/javascript/mastodon/features/about/components/rules.tsx
+@@ -52,7 +52,7 @@ export const RulesSection: FC<RulesSectionProps> = ({ isLoading = false }) => {
+ 
+   if (rules.length === 0) {
+     return (
+-      <Section title={intl.formatMessage(messages.rules)}>
++      <Section open title={intl.formatMessage(messages.rules)}>
+         <p>
+           <FormattedMessage
+             id='about.not_available'
+@@ -64,7 +64,7 @@ export const RulesSection: FC<RulesSectionProps> = ({ isLoading = false }) => {
+   }
+ 
+   return (
+-    <Section title={intl.formatMessage(messages.rules)}>
++    <Section open title={intl.formatMessage(messages.rules)}>
+       <ol className='rules-list'>
+         {rules.map((rule) => (
+           <li key={rule.id}>
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Thu, 18 Sep 2025 15:04:36 +0900
+Subject: [PATCH 2/3] Reorder about page sections
+
+
+diff --git a/app/javascript/mastodon/features/about/index.jsx b/app/javascript/mastodon/features/about/index.jsx
+index 27f03b17cb..3b844fe306 100644
+--- a/app/javascript/mastodon/features/about/index.jsx
++++ b/app/javascript/mastodon/features/about/index.jsx
+@@ -86,21 +86,7 @@ class About extends PureComponent {
+             <p><FormattedMessage id='about.powered_by' defaultMessage='Decentralized social media powered by {mastodon}' values={{ mastodon: <a href='https://joinmastodon.org' className='about__mail' target='_blank' rel='noopener'>Mastodon</a> }} /></p>
+           </div>
+ 
+-          <div className='about__meta'>
+-            <div className='about__meta__column'>
+-              <h4><FormattedMessage id='server_banner.administered_by' defaultMessage='Administered by:' /></h4>
+-
+-              <Account id={server.getIn(['contact', 'account', 'id'])} size={36} minimal />
+-            </div>
+-
+-            <hr className='about__meta__divider' />
+-
+-            <div className='about__meta__column'>
+-              <h4><FormattedMessage id='about.contact' defaultMessage='Contact:' /></h4>
+-
+-              {isLoading ? <Skeleton width='10ch' /> : <a className='about__mail' href={`mailto:${server.getIn(['contact', 'email'])}`}>{server.getIn(['contact', 'email'])}</a>}
+-            </div>
+-          </div>
++          <RulesSection />
+ 
+           <Section open title={intl.formatMessage(messages.title)}>
+             {extendedDescription.get('isLoading') ? (
+@@ -123,8 +109,6 @@ class About extends PureComponent {
+             ))}
+           </Section>
+ 
+-          <RulesSection />
+-
+           <Section title={intl.formatMessage(messages.blocks)} onOpen={this.handleDomainBlocksOpen}>
+             {domainBlocks.get('isLoading') ? (
+               <>
+@@ -156,6 +140,22 @@ class About extends PureComponent {
+             ))}
+           </Section>
+ 
++          <div className='about__meta'>
++            <div className='about__meta__column'>
++              <h4><FormattedMessage id='server_banner.administered_by' defaultMessage='Administered by:' /></h4>
++
++              <Account id={server.getIn(['contact', 'account', 'id'])} size={36} minimal />
++            </div>
++
++            <hr className='about__meta__divider' />
++
++            <div className='about__meta__column'>
++              <h4><FormattedMessage id='about.contact' defaultMessage='Contact:' /></h4>
++
++              {isLoading ? <Skeleton width='10ch' /> : <a className='about__mail' href={`mailto:${server.getIn(['contact', 'email'])}`}>{server.getIn(['contact', 'email'])}</a>}
++            </div>
++          </div>
++
+           <LinkFooter />
+ 
+           <div className='about__footer'>
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Thu, 18 Sep 2025 15:07:26 +0900
+Subject: [PATCH 3/3] Remove server hero image
+
+
+diff --git a/app/javascript/mastodon/features/about/index.jsx b/app/javascript/mastodon/features/about/index.jsx
+index 3b844fe306..5c55429d69 100644
+--- a/app/javascript/mastodon/features/about/index.jsx
++++ b/app/javascript/mastodon/features/about/index.jsx
+@@ -81,7 +81,6 @@ class About extends PureComponent {
+       <Column bindToDocument={!multiColumn} label={intl.formatMessage(messages.title)}>
+         <div className='scrollable about'>
+           <div className='about__header'>
+-            <ServerHeroImage blurhash={server.getIn(['thumbnail', 'blurhash'])} src={server.getIn(['thumbnail', 'url'])} srcSet={server.getIn(['thumbnail', 'versions'])?.map((value, key) => `${value} ${key.replace('@', '')}`).join(', ')} className='about__header__hero' />
+             <h1>{isLoading ? <Skeleton width='10ch' /> : server.get('domain')}</h1>
+             <p><FormattedMessage id='about.powered_by' defaultMessage='Decentralized social media powered by {mastodon}' values={{ mastodon: <a href='https://joinmastodon.org' className='about__mail' target='_blank' rel='noopener'>Mastodon</a> }} /></p>
+           </div>

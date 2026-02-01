@@ -1,0 +1,20 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Sat, 26 Jul 2025 21:29:39 +0900
+Subject: [PATCH] Revert "Change: Block GPTBot (#26396)"
+
+This reverts commit 405f141fe0c5ad3aa45643500f91be2b1d539554.
+
+diff --git a/public/robots.txt b/public/robots.txt
+index cccfa58f2d..a9650d109e 100644
+--- a/public/robots.txt
++++ b/public/robots.txt
+@@ -1,8 +1,5 @@
+ # See http://www.robotstxt.org/robotstxt.html for documentation on how to use the robots.txt file
+ 
+-User-agent: GPTBot
+-Disallow: /
+-
+ User-agent: *
+ Disallow: /media_proxy/
+ Disallow: /interact/

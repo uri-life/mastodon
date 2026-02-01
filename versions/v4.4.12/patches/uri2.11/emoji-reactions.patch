@@ -1,0 +1,2551 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Sun, 21 Sep 2025 19:06:48 +0000
+Subject: [PATCH 1/6] Add backend support for emoji reactions
+
+Co-authored-by: fef <owo@fef.moe>
+Co-authored-by: Jeremy Kescher <jeremy@kescher.at>
+Co-authored-by: neatchee <neatchee@gmail.com>
+Co-authored-by: Ivan Rodriguez <104603218+IRod22@users.noreply.github.com>
+Co-authored-by: Plastikmensch <plastikmensch@users.noreply.github.com>
+Co-authored-by: Essem <smswessem@gmail.com>
+
+diff --git a/app/controllers/api/v1/statuses/reactions_controller.rb b/app/controllers/api/v1/statuses/reactions_controller.rb
+new file mode 100644
+index 0000000000..c4b0fa307f
+--- /dev/null
++++ b/app/controllers/api/v1/statuses/reactions_controller.rb
+@@ -0,0 +1,19 @@
++# frozen_string_literal: true
++
++class Api::V1::Statuses::ReactionsController < Api::V1::Statuses::BaseController
++  before_action -> { doorkeeper_authorize! :write, :'write:favourites' }
++  before_action :require_user!
++
++  def create
++    ReactService.new.call(current_account, @status, params[:id])
++    render json: @status, serializer: REST::StatusSerializer
++  end
++
++  def destroy
++    UnreactWorker.perform_async(current_account.id, @status.id, params[:id])
++
++    render json: @status, serializer: REST::StatusSerializer, relationships: StatusRelationshipsPresenter.new([@status], current_account.id, reactions_map: { @status.id => false })
++  rescue Mastodon::NotPermittedError
++    not_found
++  end
++end
+diff --git a/app/helpers/context_helper.rb b/app/helpers/context_helper.rb
+index 77ddee1122..08d3ce10a3 100644
+--- a/app/helpers/context_helper.rb
++++ b/app/helpers/context_helper.rb
+@@ -13,6 +13,7 @@ module ContextHelper
+     moved_to: { 'movedTo' => { '@id' => 'as:movedTo', '@type' => '@id' } },
+     also_known_as: { 'alsoKnownAs' => { '@id' => 'as:alsoKnownAs', '@type' => '@id' } },
+     emoji: { 'toot' => 'http://joinmastodon.org/ns#', 'Emoji' => 'toot:Emoji' },
++    emoji_react: { 'litepub' => 'http://litepub.social/ns#', 'EmojiReact' => 'litepub:EmojiReact' },
+     featured: { 'toot' => 'http://joinmastodon.org/ns#', 'featured' => { '@id' => 'toot:featured', '@type' => '@id' }, 'featuredTags' => { '@id' => 'toot:featuredTags', '@type' => '@id' } },
+     property_value: { 'schema' => 'http://schema.org#', 'PropertyValue' => 'schema:PropertyValue', 'value' => 'schema:value' },
+     atom_uri: { 'ostatus' => 'http://ostatus.org#', 'atomUri' => 'ostatus:atomUri' },
+diff --git a/app/lib/activitypub/activity.rb b/app/lib/activitypub/activity.rb
+index fe47cb47d4..f0540bd44c 100644
+--- a/app/lib/activitypub/activity.rb
++++ b/app/lib/activitypub/activity.rb
+@@ -39,6 +39,8 @@ class ActivityPub::Activity
+         ActivityPub::Activity::Follow
+       when 'Like'
+         ActivityPub::Activity::Like
++      when 'EmojiReact'
++        ActivityPub::Activity::EmojiReact
+       when 'Block'
+         ActivityPub::Activity::Block
+       when 'Update'
+@@ -173,4 +175,32 @@ class ActivityPub::Activity
+     Rails.logger.info("Rejected #{@json['type']} activity #{@json['id']} from #{@account.uri}#{@options[:relayed_through_actor] && "via #{@options[:relayed_through_actor].uri}"}")
+     nil
+   end
++
++  # Ensure emoji declared in the activity's tags are
++  # present in the database and downloaded to the local cache.
++  # Required by EmojiReact and Like for emoji reactions.
++  def process_emoji_tags(name, tags)
++    tag = as_array(tags).find { |item| item['type'] == 'Emoji' }
++    return if tag.nil?
++
++    custom_emoji_parser = ActivityPub::Parser::CustomEmojiParser.new(tag)
++    return if custom_emoji_parser.shortcode.blank? || custom_emoji_parser.image_remote_url.blank? || !name.eql?(custom_emoji_parser.shortcode)
++
++    emoji = CustomEmoji.find_by(shortcode: custom_emoji_parser.shortcode, domain: @account.domain)
++    return emoji unless emoji.nil? ||
++                        custom_emoji_parser.image_remote_url != emoji.image_remote_url ||
++                        (custom_emoji_parser.updated_at && custom_emoji_parser.updated_at >= emoji.updated_at)
++
++    begin
++      emoji ||= CustomEmoji.new(domain: @account.domain,
++                                shortcode: custom_emoji_parser.shortcode,
++                                uri: custom_emoji_parser.uri)
++      emoji.image_remote_url = custom_emoji_parser.image_remote_url
++      emoji.save
++    rescue Seahorse::Client::NetworkingError => e
++      Rails.logger.warn "Error fetching emoji: #{e}"
++      return
++    end
++    emoji
++  end
+ end
+diff --git a/app/lib/activitypub/activity/emoji_react.rb b/app/lib/activitypub/activity/emoji_react.rb
+new file mode 100644
+index 0000000000..03fc008427
+--- /dev/null
++++ b/app/lib/activitypub/activity/emoji_react.rb
+@@ -0,0 +1,27 @@
++# frozen_string_literal: true
++
++class ActivityPub::Activity::EmojiReact < ActivityPub::Activity
++  CUSTOM_EMOJI_REGEX = /^:[^:]+:$/
++
++  def perform
++    original_status = status_from_uri(object_uri)
++    name = @json['content']
++    return if original_status.nil? ||
++              delete_arrived_first?(@json['id'])
++
++    if CUSTOM_EMOJI_REGEX.match?(name)
++      name.delete! ':'
++      custom_emoji = process_emoji_tags(name, @json['tag'])
++
++      return if custom_emoji.nil?
++    end
++
++    return if @account.reacted?(original_status, name, custom_emoji)
++
++    reaction = original_status.status_reactions.create!(account: @account, name: name, custom_emoji: custom_emoji)
++
++    LocalNotificationWorker.perform_async(original_status.account_id, reaction.id, 'StatusReaction', 'reaction')
++  rescue ActiveRecord::RecordInvalid
++    nil
++  end
++end
+diff --git a/app/lib/activitypub/activity/like.rb b/app/lib/activitypub/activity/like.rb
+index aa1dc30403..0b7a217736 100644
+--- a/app/lib/activitypub/activity/like.rb
++++ b/app/lib/activitypub/activity/like.rb
+@@ -1,14 +1,43 @@
+ # frozen_string_literal: true
+ 
+ class ActivityPub::Activity::Like < ActivityPub::Activity
++  CUSTOM_EMOJI_REGEX = /^:[^:]+:$/
++
+   def perform
+     original_status = status_from_uri(object_uri)
++    return if original_status.nil? || delete_arrived_first?(@json['id'])
++
++    return if maybe_process_embedded_reaction
+ 
+-    return if original_status.nil? || !original_status.account.local? || delete_arrived_first?(@json['id']) || @account.favourited?(original_status)
++    return if !original_status.account.local? || @account.favourited?(original_status)
+ 
+     favourite = original_status.favourites.create!(account: @account)
+ 
+     LocalNotificationWorker.perform_async(original_status.account_id, favourite.id, 'Favourite', 'favourite')
+     Trends.statuses.register(original_status)
+   end
++
++  # Some servers deliver reactions as likes with the emoji in content
++  # Versions of Misskey before 12.1.0 specify emojis in _misskey_reaction instead, so we check both
++  # See https://misskey-hub.net/ns.html#misskey-reaction for details
++  def maybe_process_embedded_reaction
++    original_status = status_from_uri(object_uri)
++    name = @json['content'] || @json['_misskey_reaction']
++    return false if name.nil?
++
++    if CUSTOM_EMOJI_REGEX.match?(name)
++      name.delete! ':'
++      custom_emoji = process_emoji_tags(name, @json['tag'])
++
++      return false if custom_emoji.nil? # invalid custom emoji, treat it as a regular like
++    end
++    return true if @account.reacted?(original_status, name, custom_emoji)
++
++    reaction = original_status.status_reactions.create!(account: @account, name: name, custom_emoji: custom_emoji)
++    LocalNotificationWorker.perform_async(original_status.account_id, reaction.id, 'StatusReaction', 'reaction') if original_status.account.local?
++    true
++  # account tried to react with disabled custom emoji. Returning true to discard activity.
++  rescue ActiveRecord::RecordInvalid
++    true
++  end
+ end
+diff --git a/app/lib/activitypub/activity/undo.rb b/app/lib/activitypub/activity/undo.rb
+index 9eff1b71c9..3f2df8d78c 100644
+--- a/app/lib/activitypub/activity/undo.rb
++++ b/app/lib/activitypub/activity/undo.rb
+@@ -1,6 +1,8 @@
+ # frozen_string_literal: true
+ 
+ class ActivityPub::Activity::Undo < ActivityPub::Activity
++  CUSTOM_EMOJI_REGEX = /^:[^:]+:$/
++
+   def perform
+     case @object['type']
+     when 'Announce'
+@@ -11,6 +13,8 @@ class ActivityPub::Activity::Undo < ActivityPub::Activity
+       undo_follow
+     when 'Like'
+       undo_like
++    when 'EmojiReact'
++      undo_emoji_react
+     when 'Block'
+       undo_block
+     when nil
+@@ -103,11 +107,38 @@ class ActivityPub::Activity::Undo < ActivityPub::Activity
+   def undo_like
+     status = status_from_uri(target_uri)
+ 
+-    return if status.nil? || !status.account.local?
++    return if status.nil?
+ 
+-    if @account.favourited?(status)
++    if @account.favourited?(status) && status.account.local?
+       favourite = status.favourites.where(account: @account).first
+       favourite&.destroy
++    elsif @object['content'].present? || @object['_misskey_reaction'].present?
++      undo_emoji_react
++    else
++      return unless status.account.local?
++
++      delete_later!(object_uri)
++    end
++  end
++
++  def undo_emoji_react
++    name = @object['content'] || @object['_misskey_reaction']
++    return if name.nil?
++
++    status = status_from_uri(target_uri)
++
++    return if status.nil?
++
++    if CUSTOM_EMOJI_REGEX.match?(name)
++      name.delete! ':'
++      custom_emoji = process_emoji_tags(name, @object['tag'])
++
++      return if custom_emoji.nil?
++    end
++
++    if @account.reacted?(status, name, custom_emoji)
++      reaction = status.status_reactions.where(account: @account, name: name).first
++      reaction&.destroy
+     else
+       delete_later!(object_uri)
+     end
+diff --git a/app/lib/status_cache_hydrator.rb b/app/lib/status_cache_hydrator.rb
+index 6896a36895..d6cc513122 100644
+--- a/app/lib/status_cache_hydrator.rb
++++ b/app/lib/status_cache_hydrator.rb
+@@ -55,6 +55,7 @@ class StatusCacheHydrator
+     payload[:bookmarked] = Bookmark.exists?(account_id: account_id, status_id: status.id)
+     payload[:pinned]     = StatusPin.exists?(account_id: account_id, status_id: status.id) if status.account_id == account_id
+     payload[:filtered]   = mapped_applied_custom_filter(account_id, status)
++    payload[:reactions]  = serialized_reactions(account_id, status)
+     payload[:quote] = hydrate_quote_payload(payload[:quote], status.quote, account_id, nested:) if payload[:quote]
+ 
+     if payload[:poll]
+@@ -123,6 +124,16 @@ class StatusCacheHydrator
+     ).as_json
+   end
+ 
++  def serialized_reactions(account_id, status)
++    reactions = status.reactions(account_id)
++    ActiveModelSerializers::SerializableResource.new(
++      reactions,
++      each_serializer: REST::ReactionSerializer,
++      scope: account_id, # terrible
++      scope_name: :current_user
++    ).as_json
++  end
++
+   def payload_application
+     @status.application.present? ? serialized_status_application_json : nil
+   end
+diff --git a/app/models/concerns/account/associations.rb b/app/models/concerns/account/associations.rb
+index 62c55da5de..2840fcfd71 100644
+--- a/app/models/concerns/account/associations.rb
++++ b/app/models/concerns/account/associations.rb
+@@ -31,6 +31,7 @@ module Account::Associations
+         has_many :reports
+         has_many :scheduled_statuses
+         has_many :status_pins
++        has_many :status_reactions
+         has_many :statuses
+ 
+         has_one :deletion_request, class_name: 'AccountDeletionRequest'
+diff --git a/app/models/concerns/account/interactions.rb b/app/models/concerns/account/interactions.rb
+index 4eab55ca3e..b7e9c090fc 100644
+--- a/app/models/concerns/account/interactions.rb
++++ b/app/models/concerns/account/interactions.rb
+@@ -170,6 +170,10 @@ module Account::Interactions
+     status.proper.favourites.exists?(account: self)
+   end
+ 
++  def reacted?(status, name, custom_emoji = nil)
++    status.proper.status_reactions.exists?(account: self, name: name, custom_emoji: custom_emoji)
++  end
++
+   def bookmarked?(status)
+     status.proper.bookmarks.exists?(account: self)
+   end
+diff --git a/app/models/concerns/notification/groups.rb b/app/models/concerns/notification/groups.rb
+index f902952c61..ce3094bb4c 100644
+--- a/app/models/concerns/notification/groups.rb
++++ b/app/models/concerns/notification/groups.rb
+@@ -4,7 +4,7 @@ module Notification::Groups
+   extend ActiveSupport::Concern
+ 
+   # `set_group_key!` needs to be updated if this list changes
+-  GROUPABLE_NOTIFICATION_TYPES = %i(favourite reblog follow admin.sign_up).freeze
++  GROUPABLE_NOTIFICATION_TYPES = %i(favourite reaction reblog follow admin.sign_up).freeze
+   MAXIMUM_GROUP_SPAN_HOURS = 12
+ 
+   included do
+@@ -15,7 +15,7 @@ module Notification::Groups
+     return if filtered? || GROUPABLE_NOTIFICATION_TYPES.exclude?(type)
+ 
+     type_prefix = case type
+-                  when :favourite, :reblog
++                  when :favourite, :reaction, :reblog
+                     [type, target_status&.id].join('-')
+                   when :follow, :'admin.sign_up'
+                     type
+diff --git a/app/models/notification.rb b/app/models/notification.rb
+index e7ada3399a..fbf2ede63a 100644
+--- a/app/models/notification.rb
++++ b/app/models/notification.rb
+@@ -29,6 +29,7 @@ class Notification < ApplicationRecord
+     'Follow' => :follow,
+     'FollowRequest' => :follow_request,
+     'Favourite' => :favourite,
++    'StatusReaction' => :reaction,
+     'Poll' => :poll,
+   }.freeze
+ 
+@@ -52,6 +53,9 @@ class Notification < ApplicationRecord
+     favourite: {
+       filterable: true,
+     }.freeze,
++    reaction: {
++      filterable: true,
++    }.freeze,
+     poll: {
+       filterable: false,
+     }.freeze,
+@@ -82,6 +86,7 @@ class Notification < ApplicationRecord
+     reblog: [status: :reblog],
+     mention: [mention: :status],
+     favourite: [favourite: :status],
++    reaction: [status_reaction: :status],
+     poll: [poll: :status],
+     update: :status,
+     'admin.report': [report: :target_account],
+@@ -97,6 +102,7 @@ class Notification < ApplicationRecord
+     belongs_to :follow, inverse_of: :notification
+     belongs_to :follow_request, inverse_of: :notification
+     belongs_to :favourite, inverse_of: :notification
++    belongs_to :status_reaction, inverse_of: :notification
+     belongs_to :poll, inverse_of: false
+     belongs_to :report, inverse_of: false
+     belongs_to :account_relationship_severance_event, inverse_of: false
+@@ -120,6 +126,8 @@ class Notification < ApplicationRecord
+       status&.reblog
+     when :favourite
+       favourite&.status
++    when :reaction
++      status_reaction&.status
+     when :mention
+       mention&.status
+     when :poll
+@@ -181,6 +189,8 @@ class Notification < ApplicationRecord
+     end
+   end
+ 
++  alias reaction status_reaction
++
+   after_initialize :set_from_account
+   before_validation :set_from_account
+ 
+@@ -192,7 +202,7 @@ class Notification < ApplicationRecord
+     return unless new_record?
+ 
+     case activity_type
+-    when 'Status', 'Follow', 'Favourite', 'FollowRequest', 'Poll', 'Report'
++    when 'Status', 'Follow', 'Favourite', 'StatusReaction', 'FollowRequest', 'Poll', 'Report'
+       self.from_account_id = activity&.account_id
+     when 'Mention'
+       self.from_account_id = activity&.status&.account_id
+diff --git a/app/models/status.rb b/app/models/status.rb
+index 58839b14fa..12b21505ba 100644
+--- a/app/models/status.rb
++++ b/app/models/status.rb
+@@ -84,6 +84,7 @@ class Status < ApplicationRecord
+   has_many :mentions, dependent: :destroy, inverse_of: :status
+   has_many :mentioned_accounts, through: :mentions, source: :account, class_name: 'Account'
+   has_many :media_attachments, dependent: :nullify
++  has_many :status_reactions, inverse_of: :status, dependent: :destroy
+   has_many :quotes, foreign_key: 'quoted_status_id', inverse_of: :quoted_status, dependent: :nullify
+ 
+   # The `dependent` option is enabled by the initial `mentions` association declaration
+@@ -285,6 +286,16 @@ class Status < ApplicationRecord
+     @emojis = CustomEmoji.from_text(fields.join(' '), account.domain)
+   end
+ 
++  def reactions(account_id = nil)
++    grouped_ordered_status_reactions.select(
++      [:name, :custom_emoji_id, 'COUNT(*) as count'].tap do |values|
++        values << value_for_reaction_me_column(account_id)
++      end
++    ).to_a.tap do |records|
++      ActiveRecord::Associations::Preloader.new(records: records, associations: :custom_emoji).call
++    end
++  end
++
+   def ordered_media_attachments
+     if ordered_media_attachment_ids.nil?
+       # NOTE: sort Ruby-side to avoid hitting the database when the status is
+@@ -413,6 +424,35 @@ class Status < ApplicationRecord
+ 
+   private
+ 
++  def grouped_ordered_status_reactions
++    status_reactions
++      .group(:status_id, :name, :custom_emoji_id)
++      .order(
++        Arel.sql('MIN(created_at)').asc
++      )
++  end
++
++  def value_for_reaction_me_column(account_id)
++    if account_id.nil?
++      'FALSE AS me'
++    else
++      <<~SQL.squish
++        EXISTS(
++          SELECT 1
++          FROM status_reactions inner_reactions
++          WHERE inner_reactions.account_id = #{account_id}
++            AND inner_reactions.status_id = status_reactions.status_id
++            AND inner_reactions.name = status_reactions.name
++            AND (
++              inner_reactions.custom_emoji_id = status_reactions.custom_emoji_id
++              OR inner_reactions.custom_emoji_id IS NULL
++                AND status_reactions.custom_emoji_id IS NULL
++            )
++        ) AS me
++      SQL
++    end
++  end
++
+   def update_status_stat!(attrs)
+     return if marked_for_destruction? || destroyed?
+ 
+diff --git a/app/models/status_reaction.rb b/app/models/status_reaction.rb
+new file mode 100644
+index 0000000000..2fdb3da0ac
+--- /dev/null
++++ b/app/models/status_reaction.rb
+@@ -0,0 +1,37 @@
++# frozen_string_literal: true
++
++# == Schema Information
++#
++# Table name: status_reactions
++#
++#  id              :bigint(8)        not null, primary key
++#  account_id      :bigint(8)        not null
++#  status_id       :bigint(8)        not null
++#  name            :string           default(""), not null
++#  custom_emoji_id :bigint(8)
++#  created_at      :datetime         not null
++#  updated_at      :datetime         not null
++#
++class StatusReaction < ApplicationRecord
++  belongs_to :account
++  belongs_to :status, inverse_of: :status_reactions
++  belongs_to :custom_emoji, optional: true
++
++  has_one :notification, as: :activity, dependent: :destroy
++
++  validates :name, presence: true
++  validates_with StatusReactionValidator
++
++  before_validation do
++    self.status = status.reblog if status&.reblog?
++  end
++
++  before_validation :set_custom_emoji
++
++  private
++
++  # Sets custom_emoji to nil when disabled
++  def set_custom_emoji
++    self.custom_emoji = CustomEmoji.find_by(disabled: false, shortcode: name, domain: custom_emoji.domain) if name.present? && custom_emoji.present?
++  end
++end
+diff --git a/app/policies/status_policy.rb b/app/policies/status_policy.rb
+index 540e266427..a2f3fab19c 100644
+--- a/app/policies/status_policy.rb
++++ b/app/policies/status_policy.rb
+@@ -27,6 +27,10 @@ class StatusPolicy < ApplicationPolicy
+     show? && !blocking_author?
+   end
+ 
++  def react?
++    show? && !blocking_author?
++  end
++
+   def destroy?
+     owned?
+   end
+diff --git a/app/serializers/activitypub/emoji_reaction_serializer.rb b/app/serializers/activitypub/emoji_reaction_serializer.rb
+new file mode 100644
+index 0000000000..cfb5784af5
+--- /dev/null
++++ b/app/serializers/activitypub/emoji_reaction_serializer.rb
+@@ -0,0 +1,41 @@
++# frozen_string_literal: true
++
++class ActivityPub::EmojiReactionSerializer < ActivityPub::Serializer
++  context_extensions :emoji, :emoji_react
++
++  attributes :id, :type, :actor, :content
++  attribute :virtual_object, key: :object
++  attribute :custom_emoji, key: :tag, unless: -> { object.custom_emoji.nil? }
++
++  def id
++    [ActivityPub::TagManager.instance.uri_for(object.account), '#emoji_reactions/', object.id].join
++  end
++
++  def type
++    'EmojiReact'
++  end
++
++  def actor
++    ActivityPub::TagManager.instance.uri_for(object.account)
++  end
++
++  def virtual_object
++    ActivityPub::TagManager.instance.uri_for(object.status)
++  end
++
++  def content
++    if object.custom_emoji.nil?
++      object.name
++    else
++      ":#{object.name}:"
++    end
++  end
++
++  alias reaction content
++
++  # Akkoma (and possibly others) expect `tag` to be an array, so we can't just
++  # use the has_one shorthand because we need to wrap it into an array manually
++  def custom_emoji
++    [ActivityPub::EmojiSerializer.new(object.custom_emoji).serializable_hash]
++  end
++end
+diff --git a/app/serializers/activitypub/undo_emoji_reaction_serializer.rb b/app/serializers/activitypub/undo_emoji_reaction_serializer.rb
+new file mode 100644
+index 0000000000..49f0c1c8fd
+--- /dev/null
++++ b/app/serializers/activitypub/undo_emoji_reaction_serializer.rb
+@@ -0,0 +1,19 @@
++# frozen_string_literal: true
++
++class ActivityPub::UndoEmojiReactionSerializer < ActivityPub::Serializer
++  attributes :id, :type, :actor
++
++  has_one :object, serializer: ActivityPub::EmojiReactionSerializer
++
++  def id
++    [ActivityPub::TagManager.instance.uri_for(object.account), '#emoji_reactions/', object.id, '/undo'].join
++  end
++
++  def type
++    'Undo'
++  end
++
++  def actor
++    ActivityPub::TagManager.instance.uri_for(object.account)
++  end
++end
+diff --git a/app/serializers/initial_state_serializer.rb b/app/serializers/initial_state_serializer.rb
+index 1c83eff4b2..a6c2ac76bc 100644
+--- a/app/serializers/initial_state_serializer.rb
++++ b/app/serializers/initial_state_serializer.rb
+@@ -5,13 +5,17 @@ class InitialStateSerializer < ActiveModel::Serializer
+ 
+   attributes :meta, :compose, :accounts,
+              :media_attachments, :settings,
+-             :languages
++             :languages, :max_reactions
+ 
+   attribute :critical_updates_pending, if: -> { object&.role&.can?(:view_devops) && SoftwareUpdate.check_enabled? }
+ 
+   has_one :push_subscription, serializer: REST::WebPushSubscriptionSerializer
+   has_one :role, serializer: REST::RoleSerializer
+ 
++  def max_reactions
++    StatusReactionValidator::LIMIT
++  end
++
+   def meta # rubocop:disable Metrics/AbcSize
+     store = default_meta_store
+ 
+diff --git a/app/serializers/rest/instance_serializer.rb b/app/serializers/rest/instance_serializer.rb
+index 3008df5e81..71710f1084 100644
+--- a/app/serializers/rest/instance_serializer.rb
++++ b/app/serializers/rest/instance_serializer.rb
+@@ -100,6 +100,10 @@ class REST::InstanceSerializer < ActiveModel::Serializer
+         enabled: TranslationService.configured?,
+       },
+ 
++      reactions: {
++        max_reactions: StatusReactionValidator::LIMIT,
++      },
++
+       limited_federation: limited_federation?,
+     }
+   end
+diff --git a/app/serializers/rest/notification_group_serializer.rb b/app/serializers/rest/notification_group_serializer.rb
+index f4af842e38..0ca9386a7a 100644
+--- a/app/serializers/rest/notification_group_serializer.rb
++++ b/app/serializers/rest/notification_group_serializer.rb
+@@ -24,7 +24,7 @@ class REST::NotificationGroupSerializer < ActiveModel::Serializer
+   end
+ 
+   def status_type?
+-    [:favourite, :reblog, :status, :mention, :poll, :update].include?(object.type)
++    [:favourite, :reaction, :reblog, :status, :mention, :poll, :update].include?(object.type)
+   end
+ 
+   def report_type?
+diff --git a/app/serializers/rest/notification_serializer.rb b/app/serializers/rest/notification_serializer.rb
+index 320bc86961..2137a5234c 100644
+--- a/app/serializers/rest/notification_serializer.rb
++++ b/app/serializers/rest/notification_serializer.rb
+@@ -21,7 +21,7 @@ class REST::NotificationSerializer < ActiveModel::Serializer
+   end
+ 
+   def status_type?
+-    [:favourite, :reblog, :status, :mention, :poll, :update].include?(object.type)
++    [:favourite, :reaction, :reblog, :status, :mention, :poll, :update].include?(object.type)
+   end
+ 
+   def report_type?
+diff --git a/app/serializers/rest/reaction_serializer.rb b/app/serializers/rest/reaction_serializer.rb
+index 1a5dca0183..b0f0732bf7 100644
+--- a/app/serializers/rest/reaction_serializer.rb
++++ b/app/serializers/rest/reaction_serializer.rb
+@@ -21,6 +21,14 @@ class REST::ReactionSerializer < ActiveModel::Serializer
+     object.custom_emoji.present?
+   end
+ 
++  def name
++    if extern?
++      [object.name, '@', object.custom_emoji.domain].join
++    else
++      object.name
++    end
++  end
++
+   def url
+     full_asset_url(object.custom_emoji.image.url)
+   end
+@@ -28,4 +36,10 @@ class REST::ReactionSerializer < ActiveModel::Serializer
+   def static_url
+     full_asset_url(object.custom_emoji.image.url(:static))
+   end
++
++  private
++
++  def extern?
++    custom_emoji? && object.custom_emoji.domain.present?
++  end
+ end
+diff --git a/app/serializers/rest/status_reaction_serializer.rb b/app/serializers/rest/status_reaction_serializer.rb
+new file mode 100644
+index 0000000000..1efc051088
+--- /dev/null
++++ b/app/serializers/rest/status_reaction_serializer.rb
+@@ -0,0 +1,59 @@
++# frozen_string_literal: true
++
++class REST::StatusReactionSerializer < ActiveModel::Serializer
++  include RoutingHelper
++
++  attributes :name
++
++  attribute :id, if: :exclude_count?
++  attribute :me, if: :include_me?
++  attribute :url, if: :custom_emoji?
++  attribute :static_url, if: :custom_emoji?
++  attribute :count, unless: :exclude_count?
++
++  belongs_to :account, serializer: REST::AccountSerializer, if: :include_account?
++
++  delegate :count, to: :object
++
++  def include_me?
++    !exclude_count? && current_user?
++  end
++
++  def include_account?
++    instance_options[:include_account]
++  end
++
++  def exclude_count?
++    instance_options[:exclude_count] || !object.respond_to?(:count)
++  end
++
++  def current_user?
++    !current_user.nil?
++  end
++
++  def custom_emoji?
++    object.custom_emoji.present?
++  end
++
++  def name
++    if extern?
++      [object.name, '@', object.custom_emoji.domain].join
++    else
++      object.name
++    end
++  end
++
++  def url
++    full_asset_url(object.custom_emoji.image.url)
++  end
++
++  def static_url
++    full_asset_url(object.custom_emoji.image.url(:static))
++  end
++
++  private
++
++  def extern?
++    custom_emoji? && object.custom_emoji.domain.present?
++  end
++end
+diff --git a/app/serializers/rest/status_serializer.rb b/app/serializers/rest/status_serializer.rb
+index 29e77e7d5b..71591d9ae6 100644
+--- a/app/serializers/rest/status_serializer.rb
++++ b/app/serializers/rest/status_serializer.rb
+@@ -28,6 +28,7 @@ class REST::StatusSerializer < ActiveModel::Serializer
+   has_many :ordered_mentions, key: :mentions
+   has_many :tags
+   has_many :emojis, serializer: REST::CustomEmojiSerializer
++  has_many :reactions, serializer: REST::ReactionSerializer
+ 
+   has_one :quote, key: :quote, serializer: REST::QuoteSerializer
+   has_one :preview_card, key: :card, serializer: REST::PreviewCardSerializer
+@@ -159,6 +160,10 @@ class REST::StatusSerializer < ActiveModel::Serializer
+     object.active_mentions.to_a.sort_by(&:id)
+   end
+ 
++  def reactions
++    object.reactions(current_user&.account&.id)
++  end
++
+   private
+ 
+   def relationships
+diff --git a/app/serializers/rest/v1/instance_serializer.rb b/app/serializers/rest/v1/instance_serializer.rb
+index a1d51f50e4..8386da6544 100644
+--- a/app/serializers/rest/v1/instance_serializer.rb
++++ b/app/serializers/rest/v1/instance_serializer.rb
+@@ -75,6 +75,10 @@ class REST::V1::InstanceSerializer < ActiveModel::Serializer
+         min_expiration: PollExpirationValidator::MIN_EXPIRATION,
+         max_expiration: PollExpirationValidator::MAX_EXPIRATION,
+       },
++
++      reactions: {
++        max_reactions: StatusReactionValidator::LIMIT,
++      },
+     }
+   end
+ 
+diff --git a/app/services/delete_account_service.rb b/app/services/delete_account_service.rb
+index 6557dda48f..343dffcfcd 100644
+--- a/app/services/delete_account_service.rb
++++ b/app/services/delete_account_service.rb
+@@ -150,6 +150,7 @@ class DeleteAccountService < BaseService
+     purge_polls!
+     purge_generated_notifications!
+     purge_favourites!
++    purge_status_reactions!
+     purge_bookmarks!
+     purge_feeds!
+     purge_other_associations!
+@@ -197,6 +198,15 @@ class DeleteAccountService < BaseService
+     end
+   end
+ 
++  def purge_status_reactions!
++    @account.status_reactions.in_batches do |status_reactions|
++      ids = status_reactions.pluck(:status_id)
++      Chewy.strategy.current.update(StatusesIndex, ids) if Chewy.enabled?
++      Rails.cache.delete_multi(ids.map { |id| "statuses/#{id}" })
++      status_reactions.delete_all
++    end
++  end
++
+   def purge_bookmarks!
+     @account.bookmarks.in_batches do |bookmarks|
+       Chewy.strategy.current.update(StatusesIndex, bookmarks.pluck(:status_id)) if Chewy.enabled?
+diff --git a/app/services/react_service.rb b/app/services/react_service.rb
+new file mode 100644
+index 0000000000..cfc3f99a78
+--- /dev/null
++++ b/app/services/react_service.rb
+@@ -0,0 +1,46 @@
++# frozen_string_literal: true
++
++class ReactService < BaseService
++  include Authorization
++  include Payloadable
++
++  def call(account, status, emoji)
++    authorize_with account, status, :react?
++
++    name, domain = emoji.split('@')
++    return unless domain.nil? || status.local?
++
++    custom_emoji = CustomEmoji.find_by(shortcode: name, domain: domain)
++    reaction = StatusReaction.find_by(account: account, status: status, name: name, custom_emoji: custom_emoji)
++    return reaction unless reaction.nil?
++
++    reaction = StatusReaction.create!(account: account, status: status, name: name, custom_emoji: custom_emoji)
++
++    Trends.statuses.register(status)
++
++    create_notification(reaction)
++    increment_statistics
++
++    reaction
++  end
++
++  private
++
++  def create_notification(reaction)
++    status = reaction.status
++
++    if status.account.local?
++      LocalNotificationWorker.perform_async(status.account_id, reaction.id, 'StatusReaction', 'reaction')
++    elsif status.account.activitypub?
++      ActivityPub::DeliveryWorker.perform_async(build_json(reaction), reaction.account_id, status.account.inbox_url)
++    end
++  end
++
++  def increment_statistics
++    ActivityTracker.increment('activity:interactions')
++  end
++
++  def build_json(reaction)
++    Oj.dump(serialize_payload(reaction, ActivityPub::EmojiReactionSerializer))
++  end
++end
+diff --git a/app/services/unreact_service.rb b/app/services/unreact_service.rb
+new file mode 100644
+index 0000000000..49d232e931
+--- /dev/null
++++ b/app/services/unreact_service.rb
+@@ -0,0 +1,27 @@
++# frozen_string_literal: true
++
++class UnreactService < BaseService
++  include Payloadable
++
++  def call(account, status, emoji)
++    name, domain = emoji.split('@')
++    custom_emoji = CustomEmoji.find_by(shortcode: name, domain: domain)
++    reaction = StatusReaction.find_by(account: account, status: status, name: name, custom_emoji: custom_emoji)
++    return if reaction.nil?
++
++    reaction.destroy!
++    create_notification(reaction) if !status.account.local? && status.account.activitypub?
++    reaction
++  end
++
++  private
++
++  def create_notification(reaction)
++    status = reaction.status
++    ActivityPub::DeliveryWorker.perform_async(build_json(reaction), reaction.account_id, status.account.inbox_url)
++  end
++
++  def build_json(reaction)
++    Oj.dump(serialize_payload(reaction, ActivityPub::UndoEmojiReactionSerializer))
++  end
++end
+diff --git a/app/validators/status_reaction_validator.rb b/app/validators/status_reaction_validator.rb
+new file mode 100644
+index 0000000000..ef057a2d81
+--- /dev/null
++++ b/app/validators/status_reaction_validator.rb
+@@ -0,0 +1,28 @@
++# frozen_string_literal: true
++
++class StatusReactionValidator < ActiveModel::Validator
++  SUPPORTED_EMOJIS = Oj.load_file(Rails.root.join('app', 'javascript', 'mastodon', 'features', 'emoji', 'emoji_map.json').to_s).keys.freeze
++
++  LIMIT = 1
++
++  def validate(reaction)
++    return if reaction.name.blank?
++
++    reaction.errors.add(:name, I18n.t('reactions.errors.unrecognized_emoji')) if reaction.custom_emoji_id.blank? && !unicode_emoji?(reaction.name)
++    reaction.errors.add(:base, I18n.t('reactions.errors.limit_reached')) if reaction.account.local? && new_reaction?(reaction) && limit_reached?(reaction)
++  end
++
++  private
++
++  def unicode_emoji?(name)
++    SUPPORTED_EMOJIS.include?(name)
++  end
++
++  def new_reaction?(reaction)
++    !reaction.status.status_reactions.exists?(status: reaction.status, account: reaction.account, name: reaction.name, custom_emoji: reaction.custom_emoji)
++  end
++
++  def limit_reached?(reaction)
++    reaction.status.status_reactions.where(status: reaction.status, account: reaction.account).count >= LIMIT
++  end
++end
+diff --git a/app/workers/unreact_worker.rb b/app/workers/unreact_worker.rb
+new file mode 100644
+index 0000000000..15f1f4dd77
+--- /dev/null
++++ b/app/workers/unreact_worker.rb
+@@ -0,0 +1,11 @@
++# frozen_string_literal: true
++
++class UnreactWorker
++  include Sidekiq::Worker
++
++  def perform(account_id, status_id, emoji)
++    UnreactService.new.call(Account.find(account_id), Status.find(status_id), emoji)
++  rescue ActiveRecord::RecordNotFound
++    true
++  end
++end
+diff --git a/config/routes/api.rb b/config/routes/api.rb
+index 93d7274ab6..884a09e625 100644
+--- a/config/routes/api.rb
++++ b/config/routes/api.rb
+@@ -15,12 +15,18 @@ namespace :api, format: false do
+       scope module: :statuses do
+         resources :reblogged_by, controller: :reblogged_by_accounts, only: :index
+         resources :favourited_by, controller: :favourited_by_accounts, only: :index
++        resources :reactions, controller: :reactions, only: :index
+         resource :reblog, only: :create
+         post :unreblog, to: 'reblogs#destroy'
+ 
+         resource :favourite, only: :create
+         post :unfavourite, to: 'favourites#destroy'
+ 
++        # foreign custom emojis are encoded as shortcode@domain.tld
++        # the constraint prevents rails from interpreting the ".tld" as a filename extension
++        post '/react/:id', to: 'reactions#create', constraints: { id: %r{[^/]+} }
++        post '/unreact/:id', to: 'reactions#destroy', constraints: { id: %r{[^/]+} }
++
+         resource :bookmark, only: :create
+         post :unbookmark, to: 'bookmarks#destroy'
+ 
+diff --git a/db/migrate/20221124114030_create_status_reactions.rb b/db/migrate/20221124114030_create_status_reactions.rb
+new file mode 100644
+index 0000000000..7e6e87e7bb
+--- /dev/null
++++ b/db/migrate/20221124114030_create_status_reactions.rb
+@@ -0,0 +1,16 @@
++# frozen_string_literal: true
++
++class CreateStatusReactions < ActiveRecord::Migration[6.1]
++  def change
++    create_table :status_reactions do |t|
++      t.references :account, null: false, foreign_key: { on_delete: :cascade }
++      t.references :status, null: false, foreign_key: { on_delete: :cascade }
++      t.string :name, null: false, default: ''
++      t.references :custom_emoji, null: true, foreign_key: { on_delete: :cascade }
++
++      t.timestamps
++    end
++
++    add_index :status_reactions, [:account_id, :status_id, :name], unique: true, name: :index_status_reactions_on_account_id_and_status_id
++  end
++end
+diff --git a/db/schema.rb b/db/schema.rb
+index 0237b47644..8d1e5e0145 100644
+--- a/db/schema.rb
++++ b/db/schema.rb
+@@ -1093,6 +1093,19 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_27_132728) do
+     t.index ["status_id"], name: "index_status_pins_on_status_id"
+   end
+ 
++  create_table "status_reactions", force: :cascade do |t|
++    t.bigint "account_id", null: false
++    t.bigint "status_id", null: false
++    t.string "name", default: "", null: false
++    t.bigint "custom_emoji_id"
++    t.datetime "created_at", null: false
++    t.datetime "updated_at", null: false
++    t.index ["account_id", "status_id", "name"], name: "index_status_reactions_on_account_id_and_status_id", unique: true
++    t.index ["account_id"], name: "index_status_reactions_on_account_id"
++    t.index ["custom_emoji_id"], name: "index_status_reactions_on_custom_emoji_id"
++    t.index ["status_id"], name: "index_status_reactions_on_status_id"
++  end
++
+   create_table "status_stats", force: :cascade do |t|
+     t.bigint "status_id", null: false
+     t.bigint "replies_count", default: 0, null: false
+@@ -1449,6 +1462,9 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_27_132728) do
+   add_foreign_key "status_edits", "statuses", on_delete: :cascade
+   add_foreign_key "status_pins", "accounts", name: "fk_d4cb435b62", on_delete: :cascade
+   add_foreign_key "status_pins", "statuses", on_delete: :cascade
++  add_foreign_key "status_reactions", "accounts", on_delete: :cascade
++  add_foreign_key "status_reactions", "custom_emojis", on_delete: :cascade
++  add_foreign_key "status_reactions", "statuses", on_delete: :cascade
+   add_foreign_key "status_stats", "statuses", on_delete: :cascade
+   add_foreign_key "status_trends", "accounts", on_delete: :cascade
+   add_foreign_key "status_trends", "statuses", on_delete: :cascade
+@@ -1498,9 +1514,9 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_27_132728) do
+   add_index "instances", ["domain"], name: "index_instances_on_domain", unique: true
+ 
+   create_view "user_ips", sql_definition: <<-SQL
+-      SELECT user_id,
+-      ip,
+-      max(used_at) AS used_at
++      SELECT t0.user_id,
++      t0.ip,
++      max(t0.used_at) AS used_at
+      FROM ( SELECT users.id AS user_id,
+               users.sign_up_ip AS ip,
+               users.created_at AS used_at
+@@ -1517,7 +1533,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_27_132728) do
+               login_activities.created_at
+              FROM login_activities
+             WHERE (login_activities.success = true)) t0
+-    GROUP BY user_id, ip;
++    GROUP BY t0.user_id, t0.ip;
+   SQL
+   create_view "account_summaries", materialized: true, sql_definition: <<-SQL
+       SELECT accounts.id AS account_id,
+@@ -1538,9 +1554,9 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_27_132728) do
+   add_index "account_summaries", ["account_id"], name: "index_account_summaries_on_account_id", unique: true
+ 
+   create_view "global_follow_recommendations", materialized: true, sql_definition: <<-SQL
+-      SELECT account_id,
+-      sum(rank) AS rank,
+-      array_agg(reason) AS reason
++      SELECT t0.account_id,
++      sum(t0.rank) AS rank,
++      array_agg(t0.reason) AS reason
+      FROM ( SELECT account_summaries.account_id,
+               ((count(follows.id))::numeric / (1.0 + (count(follows.id))::numeric)) AS rank,
+               'most_followed'::text AS reason
+@@ -1564,8 +1580,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_27_132728) do
+                     WHERE (follow_recommendation_suppressions.account_id = statuses.account_id)))))
+             GROUP BY account_summaries.account_id
+            HAVING (sum((status_stats.reblogs_count + status_stats.favourites_count)) >= (5)::numeric)) t0
+-    GROUP BY account_id
+-    ORDER BY (sum(rank)) DESC;
++    GROUP BY t0.account_id
++    ORDER BY (sum(t0.rank)) DESC;
+   SQL
+   add_index "global_follow_recommendations", ["account_id"], name: "index_global_follow_recommendations_on_account_id", unique: true
+ 
+diff --git a/lib/mastodon/cli/cache.rb b/lib/mastodon/cli/cache.rb
+index cfb6cba1ff..3ccec418d2 100644
+--- a/lib/mastodon/cli/cache.rb
++++ b/lib/mastodon/cli/cache.rb
+@@ -63,6 +63,7 @@ module Mastodon::CLI
+         status_stat.replies_count    = status.replies.not_direct_visibility.count
+         status_stat.reblogs_count    = status.reblogs.count
+         status_stat.favourites_count = status.favourites.count
++        status_stat.reactions_count  = status.status_reactions.count
+ 
+         status_stat.save if status_stat.changed?
+       end
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Sun, 18 Jan 2026 04:01:43 +0900
+Subject: [PATCH 2/6] Add frontend support for emoji reactions
+
+Co-authored-by: fef <owo@fef.moe>
+Co-authored-by: Jeremy Kescher <jeremy@kescher.at>
+Co-authored-by: neatchee <neatchee@gmail.com>
+Co-authored-by: Ivan Rodriguez <104603218+IRod22@users.noreply.github.com>
+Co-authored-by: Plastikmensch <plastikmensch@users.noreply.github.com>
+Co-authored-by: Essem <smswessem@gmail.com>
+
+diff --git a/app/javascript/mastodon/actions/interactions.js b/app/javascript/mastodon/actions/interactions.js
+index d3538a8850..8edb87271a 100644
+--- a/app/javascript/mastodon/actions/interactions.js
++++ b/app/javascript/mastodon/actions/interactions.js
+@@ -7,6 +7,10 @@ import { importFetchedAccounts, importFetchedStatus } from './importer';
+ import { unreblog, reblog } from './interactions_typed';
+ import { openModal } from './modal';
+ 
++export const REACTIONS_EXPAND_REQUEST = 'REACTIONS_EXPAND_REQUEST';
++export const REACTIONS_EXPAND_SUCCESS = 'REACTIONS_EXPAND_SUCCESS';
++export const REACTIONS_EXPAND_FAIL    = 'REACTIONS_EXPAND_FAIL';
++
+ export const REBLOGS_EXPAND_REQUEST = 'REBLOGS_EXPAND_REQUEST';
+ export const REBLOGS_EXPAND_SUCCESS = 'REBLOGS_EXPAND_SUCCESS';
+ export const REBLOGS_EXPAND_FAIL = 'REBLOGS_EXPAND_FAIL';
+@@ -19,6 +23,10 @@ export const UNFAVOURITE_REQUEST = 'UNFAVOURITE_REQUEST';
+ export const UNFAVOURITE_SUCCESS = 'UNFAVOURITE_SUCCESS';
+ export const UNFAVOURITE_FAIL    = 'UNFAVOURITE_FAIL';
+ 
++export const REACTIONS_FETCH_REQUEST = 'REACTIONS_FETCH_REQUEST';
++export const REACTIONS_FETCH_SUCCESS = 'REACTIONS_FETCH_SUCCESS';
++export const REACTIONS_FETCH_FAIL    = 'REACTIONS_FETCH_FAIL';
++
+ export const REBLOGS_FETCH_REQUEST = 'REBLOGS_FETCH_REQUEST';
+ export const REBLOGS_FETCH_SUCCESS = 'REBLOGS_FETCH_SUCCESS';
+ export const REBLOGS_FETCH_FAIL    = 'REBLOGS_FETCH_FAIL';
+@@ -47,6 +55,16 @@ export const UNBOOKMARK_REQUEST = 'UNBOOKMARKED_REQUEST';
+ export const UNBOOKMARK_SUCCESS = 'UNBOOKMARKED_SUCCESS';
+ export const UNBOOKMARK_FAIL    = 'UNBOOKMARKED_FAIL';
+ 
++export const REACTION_UPDATE = 'REACTION_UPDATE';
++
++export const REACTION_ADD_REQUEST = 'REACTION_ADD_REQUEST';
++export const REACTION_ADD_SUCCESS = 'REACTION_ADD_SUCCESS';
++export const REACTION_ADD_FAIL    = 'REACTION_ADD_FAIL';
++
++export const REACTION_REMOVE_REQUEST = 'REACTION_REMOVE_REQUEST';
++export const REACTION_REMOVE_SUCCESS = 'REACTION_REMOVE_SUCCESS';
++export const REACTION_REMOVE_FAIL    = 'REACTION_REMOVE_FAIL';
++
+ export * from "./interactions_typed";
+ 
+ export function favourite(status) {
+@@ -197,6 +215,90 @@ export function unbookmarkFail(status, error) {
+   };
+ }
+ 
++export function fetchReactions(id) {
++  return (dispatch, getState) => {
++    dispatch(fetchReactionsRequest(id));
++
++    api(getState).get(`/api/v1/statuses/${id}/reactions`).then(response => {
++      const next = getLinks(response).refs.find(link => link.rel === 'next');
++      const accounts = response.data.map(item => item.account);
++      dispatch(importFetchedAccounts(accounts));
++      dispatch(fetchReactionsSuccess(id, response.data, next ? next.uri : null));
++      dispatch(fetchRelationships(accounts.map(item => item.id)));
++    }).catch(error => {
++      dispatch(fetchReactionsFail(id, error));
++    });
++  };
++}
++
++export function fetchReactionsRequest(id) {
++  return {
++    type: REACTIONS_FETCH_REQUEST,
++    id,
++  };
++}
++
++export function fetchReactionsSuccess(id, reactions, next) {
++  return {
++    type: REACTIONS_FETCH_SUCCESS,
++    id,
++    reactions,
++    next,
++  };
++}
++
++export function fetchReactionsFail(id, error) {
++  return {
++    type: REACTIONS_FETCH_FAIL,
++    id,
++    error,
++  };
++}
++
++export function expandReactions(id) {
++  return (dispatch, getState) => {
++    const url = getState().getIn(['status_reactions', 'reactions', id, 'next']);
++    if (url === null) {
++      return;
++    }
++
++    dispatch(expandReactionsRequest(id));
++
++    api(getState).get(url).then(response => {
++      const next = getLinks(response).refs.find(link => link.rel === 'next');
++      const accounts = response.data.map(item => item.account);
++
++      dispatch(importFetchedAccounts(accounts));
++      dispatch(expandReactionsSuccess(id, response.data, next ? next.uri : null));
++      dispatch(fetchRelationships(accounts.map(item => item.id)));
++    }).catch(error => dispatch(expandReactionsFail(id, error)));
++  };
++}
++
++export function expandReactionsRequest(id) {
++  return {
++    type: REACTIONS_EXPAND_REQUEST,
++    id,
++  };
++}
++
++export function expandReactionsSuccess(id, reactions, next) {
++  return {
++    type: REACTIONS_EXPAND_SUCCESS,
++    id,
++    reactions,
++    next,
++  };
++}
++
++export function expandReactionsFail(id, error) {
++  return {
++    type: REACTIONS_EXPAND_FAIL,
++    id,
++    error,
++  };
++}
++
+ export function fetchReblogs(id) {
+   return (dispatch) => {
+     dispatch(fetchReblogsRequest(id));
+@@ -482,3 +584,75 @@ export function toggleFavourite(statusId) {
+     }
+   };
+ }
++
++export const addReaction = (statusId, name, url) => (dispatch, getState) => {
++  const status = getState().get('statuses').get(statusId);
++  let alreadyAdded = false;
++  if (status) {
++    const reaction = status.get('reactions').find(x => x.get('name') === name);
++    if (reaction && reaction.get('me')) {
++      alreadyAdded = true;
++    }
++  }
++  if (!alreadyAdded) {
++    dispatch(addReactionRequest(statusId, name, url));
++  }
++
++  api(getState).post(`/api/v1/statuses/${statusId}/react/${encodeURIComponent(name)}`).then((response) => {
++    dispatch(importFetchedStatus(response.data));
++    dispatch(addReactionSuccess(statusId, name));
++  }).catch(err => {
++    if (!alreadyAdded) {
++      dispatch(addReactionFail(statusId, name, err));
++    }
++  });
++};
++
++export const addReactionRequest = (statusId, name, url) => ({
++  type: REACTION_ADD_REQUEST,
++  id: statusId,
++  name,
++  url,
++});
++
++export const addReactionSuccess = (statusId, name) => ({
++  type: REACTION_ADD_SUCCESS,
++  id: statusId,
++  name,
++});
++
++export const addReactionFail = (statusId, name, error) => ({
++  type: REACTION_ADD_FAIL,
++  id: statusId,
++  name,
++  error,
++});
++
++export const removeReaction = (statusId, name) => (dispatch, getState) => {
++  dispatch(removeReactionRequest(statusId, name));
++
++  api(getState).post(`/api/v1/statuses/${statusId}/unreact/${encodeURIComponent(name)}`).then((response) => {
++    dispatch(importFetchedStatus(response.data));
++    dispatch(removeReactionSuccess(statusId, name));
++  }).catch(err => {
++    dispatch(removeReactionFail(statusId, name, err));
++  });
++};
++
++export const removeReactionRequest = (statusId, name) => ({
++  type: REACTION_REMOVE_REQUEST,
++  id: statusId,
++  name,
++});
++
++export const removeReactionSuccess = (statusId, name) => ({
++  type: REACTION_REMOVE_SUCCESS,
++  id: statusId,
++  name,
++});
++
++export const removeReactionFail = (statusId, name) => ({
++  type: REACTION_REMOVE_FAIL,
++  id: statusId,
++  name,
++});
+diff --git a/app/javascript/mastodon/actions/notification_groups.ts b/app/javascript/mastodon/actions/notification_groups.ts
+index 4386325481..2ec8b00318 100644
+--- a/app/javascript/mastodon/actions/notification_groups.ts
++++ b/app/javascript/mastodon/actions/notification_groups.ts
+@@ -71,7 +71,7 @@ function dispatchAssociatedRecords(
+ }
+ 
+ function selectNotificationGroupedTypes(state: RootState) {
+-  const types: NotificationType[] = ['favourite', 'reblog'];
++  const types: NotificationType[] = ['favourite', 'reblog', 'reaction'];
+ 
+   if (selectSettingsNotificationsGroupFollows(state)) types.push('follow');
+ 
+diff --git a/app/javascript/mastodon/api_types/notifications.ts b/app/javascript/mastodon/api_types/notifications.ts
+index 190d8c8396..9413e16b72 100644
+--- a/app/javascript/mastodon/api_types/notifications.ts
++++ b/app/javascript/mastodon/api_types/notifications.ts
+@@ -11,6 +11,7 @@ export const allNotificationTypes = [
+   'follow',
+   'follow_request',
+   'favourite',
++  'reaction',
+   'reblog',
+   'mention',
+   'poll',
+@@ -25,6 +26,7 @@ export const allNotificationTypes = [
+ 
+ export type NotificationWithStatusType =
+   | 'favourite'
++  | 'reaction'
+   | 'reblog'
+   | 'status'
+   | 'mention'
+diff --git a/app/javascript/mastodon/api_types/reactions.ts b/app/javascript/mastodon/api_types/reactions.ts
+new file mode 100644
+index 0000000000..99b0dd1342
+--- /dev/null
++++ b/app/javascript/mastodon/api_types/reactions.ts
+@@ -0,0 +1,10 @@
++import type { ApiAccountJSON } from './accounts';
++
++export interface ApiStatusReactionJSON {
++  id?: string;
++  name: string;
++  static_url?: string | undefined;
++  url?: string | undefined;
++  count?: number;
++  account?: ApiAccountJSON;
++}
+diff --git a/app/javascript/mastodon/components/status.jsx b/app/javascript/mastodon/components/status.jsx
+index 29fd4234dd..9f47652c22 100644
+--- a/app/javascript/mastodon/components/status.jsx
++++ b/app/javascript/mastodon/components/status.jsx
+@@ -16,6 +16,7 @@ import { ContentWarning } from 'mastodon/components/content_warning';
+ import { FilterWarning } from 'mastodon/components/filter_warning';
+ import { Icon }  from 'mastodon/components/icon';
+ import { PictureInPicturePlaceholder } from 'mastodon/components/picture_in_picture_placeholder';
++import { identityContextPropShape, withIdentity } from 'mastodon/identity_context';
+ import { withOptionalRouter, WithOptionalRouterPropTypes } from 'mastodon/utils/react_router';
+ 
+ import Card from '../features/status/components/card';
+@@ -33,6 +34,7 @@ import { getHashtagBarForStatus } from './hashtag_bar';
+ import { RelativeTimestamp } from './relative_timestamp';
+ import StatusActionBar from './status_action_bar';
+ import StatusContent from './status_content';
++import { StatusReactions } from './status_reactions';
+ import { StatusThreadLabel } from './status_thread_label';
+ import { VisibilityIcon } from './visibility_icon';
+ 
+@@ -84,6 +86,7 @@ class Status extends ImmutablePureComponent {
+   static contextType = SensitiveMediaContext;
+ 
+   static propTypes = {
++    identity: identityContextPropShape,
+     status: ImmutablePropTypes.map,
+     account: ImmutablePropTypes.record,
+     children: PropTypes.node,
+@@ -97,6 +100,8 @@ class Status extends ImmutablePureComponent {
+     onDelete: PropTypes.func,
+     onDirect: PropTypes.func,
+     onMention: PropTypes.func,
++    onReactionAdd: PropTypes.func,
++    onReactionRemove: PropTypes.func,
+     onPin: PropTypes.func,
+     onOpenMedia: PropTypes.func,
+     onOpenVideo: PropTypes.func,
+@@ -599,6 +604,14 @@ class Status extends ImmutablePureComponent {
+               </>
+             )}
+ 
++            <StatusReactions
++              statusId={status.get('id')}
++              reactions={status.get('reactions')}
++              addReaction={this.props.onReactionAdd}
++              removeReaction={this.props.onReactionRemove}
++              canReact={this.props.identity.signedIn}
++            />
++
+             {!isQuotedPost &&
+               <StatusActionBar scrollKey={scrollKey} status={status} account={account}  {...other} />
+             }
+@@ -610,4 +623,4 @@ class Status extends ImmutablePureComponent {
+ 
+ }
+ 
+-export default withOptionalRouter(injectIntl(Status));
++export default withOptionalRouter(injectIntl(withIdentity(Status)));
+diff --git a/app/javascript/mastodon/components/status_action_bar.jsx b/app/javascript/mastodon/components/status_action_bar.jsx
+index ec5a9780cb..472eb0930b 100644
+--- a/app/javascript/mastodon/components/status_action_bar.jsx
++++ b/app/javascript/mastodon/components/status_action_bar.jsx
+@@ -9,6 +9,7 @@ import ImmutablePropTypes from 'react-immutable-proptypes';
+ import ImmutablePureComponent from 'react-immutable-pure-component';
+ import { connect } from 'react-redux';
+ 
++import AddReactionIcon from '@/material-icons/400-24px/add_reaction.svg?react';
+ import BookmarkIcon from '@/material-icons/400-24px/bookmark-fill.svg?react';
+ import BookmarkBorderIcon from '@/material-icons/400-24px/bookmark.svg?react';
+ import MoreHorizIcon from '@/material-icons/400-24px/more_horiz.svg?react';
+@@ -26,7 +27,8 @@ import { PERMISSION_MANAGE_USERS, PERMISSION_MANAGE_FEDERATION } from 'mastodon/
+ import { WithRouterPropTypes } from 'mastodon/utils/react_router';
+ 
+ import { Dropdown } from 'mastodon/components/dropdown_menu';
+-import { me } from '../initial_state';
++import EmojiPickerDropdown from '../features/compose/containers/emoji_picker_dropdown_container';
++import { me, maxReactions } from '../initial_state';
+ 
+ import { IconButton } from './icon_button';
+ 
+@@ -47,6 +49,7 @@ const messages = defineMessages({
+   cancel_reblog_private: { id: 'status.cancel_reblog_private', defaultMessage: 'Unboost' },
+   cannot_reblog: { id: 'status.cannot_reblog', defaultMessage: 'This post cannot be boosted' },
+   favourite: { id: 'status.favourite', defaultMessage: 'Favorite' },
++  react: { id: 'status.react', defaultMessage: 'React' },
+   removeFavourite: { id: 'status.remove_favourite', defaultMessage: 'Remove from favorites' },
+   bookmark: { id: 'status.bookmark', defaultMessage: 'Bookmark' },
+   removeBookmark: { id: 'status.remove_bookmark', defaultMessage: 'Remove bookmark' },
+@@ -80,6 +83,7 @@ class StatusActionBar extends ImmutablePureComponent {
+     relationship: ImmutablePropTypes.record,
+     onReply: PropTypes.func,
+     onFavourite: PropTypes.func,
++    onReactionAdd: PropTypes.func,
+     onReblog: PropTypes.func,
+     onDelete: PropTypes.func,
+     onDirect: PropTypes.func,
+@@ -151,6 +155,10 @@ class StatusActionBar extends ImmutablePureComponent {
+     }
+   };
+ 
++  handleEmojiPick = data => {
++    this.props.onReactionAdd(this.props.status.get('id'), data.native.replace(/:/g, ''), data.imageUrl);
++  };
++
+   handleBookmarkClick = () => {
+     this.props.onBookmark(this.props.status);
+   };
+@@ -369,7 +377,7 @@ class StatusActionBar extends ImmutablePureComponent {
+       reblogIconComponent = RepeatDisabledIcon;
+     }
+ 
+-
++    const canReact = permissions && status.get('reactions').filter(r => r.get('count') > 0 && r.get('me')).size < maxReactions;
+     const bookmarkTitle = intl.formatMessage(status.get('bookmarked') ? messages.removeBookmark : messages.bookmark);
+     const favouriteTitle = intl.formatMessage(status.get('favourited') ? messages.removeFavourite : messages.favourite);
+     const isReply = status.get('in_reply_to_account_id') === status.getIn(['account', 'id']);
+@@ -385,6 +393,9 @@ class StatusActionBar extends ImmutablePureComponent {
+         <div className='status__action-bar__button-wrapper'>
+           <IconButton className='status__action-bar__button star-icon' animate active={status.get('favourited')} title={favouriteTitle} icon='star' iconComponent={status.get('favourited') ? StarIcon : StarBorderIcon} onClick={this.handleFavouriteClick} counter={withCounters ? status.get('favourites_count') : undefined} />
+         </div>
++        <div className='status__action-bar__button-wrapper'>
++          <EmojiPickerDropdown className='status__action-bar-button' onPickEmoji={this.handleEmojiPick} title={intl.formatMessage(messages.react)} icon={AddReactionIcon} disabled={!canReact} counter={withCounters ? status.get('reactions_count') : undefined} />
++        </div>
+         <div className='status__action-bar__button-wrapper'>
+           <IconButton className='status__action-bar__button bookmark-icon' disabled={!signedIn} active={status.get('bookmarked')} title={bookmarkTitle} icon='bookmark' iconComponent={status.get('bookmarked') ? BookmarkIcon : BookmarkBorderIcon} onClick={this.handleBookmarkClick} />
+         </div>
+diff --git a/app/javascript/mastodon/components/status_reactions.jsx b/app/javascript/mastodon/components/status_reactions.jsx
+new file mode 100644
+index 0000000000..30be7860e8
+--- /dev/null
++++ b/app/javascript/mastodon/components/status_reactions.jsx
+@@ -0,0 +1,200 @@
++import PropTypes from 'prop-types';
++import { PureComponent, useMemo } from 'react';
++
++import classNames from 'classnames';
++
++import ImmutablePropTypes from 'react-immutable-proptypes';
++import ImmutablePureComponent from 'react-immutable-pure-component';
++
++import { animated, useTransition } from '@react-spring/web';
++
++import { unicodeMapping } from '../features/emoji/emoji_unicode_mapping_light';
++import { autoPlayGif, reduceMotion } from '../initial_state';
++import { assetHost } from '../utils/config';
++
++import { AnimatedNumber } from './animated_number';
++
++export const StatusReactions = ({
++  statusId,
++  reactions,
++  addReaction,
++  canReact,
++  removeReaction,
++}) => {
++  const visibleReactions = useMemo(() => {
++    let visible = reactions
++      .filter(x => x.get('count') > 0)
++      .sort((a, b) => b.get('count') - a.get('count'));
++
++    return visible.toArray();
++  }, [reactions]);
++
++  const transitions = useTransition(visibleReactions, {
++    from: {
++      scale: 0,
++    },
++    initial: {
++      scale: 1,
++    },
++    enter: {
++      scale: 1,
++    },
++    leave: {
++      scale: 0,
++    },
++    immediate: reduceMotion,
++    keys: visibleReactions.map(x => x.get('name')),
++  });
++
++  return (
++    <div className={classNames('reactions-bar', { 'reactions-bar--empty': visibleReactions.length === 0 })}>
++      {transitions(({ scale }, reaction) => (
++        <Reaction
++          key={reaction.get('name')}
++          statusId={statusId}
++          reaction={reaction}
++          style={{ transform: scale.to((s) => `scale(${s})`) }}
++          addReaction={addReaction}
++          removeReaction={removeReaction}
++          canReact={canReact}
++        />
++      ))}
++    </div>
++  );
++};
++StatusReactions.propTypes = {
++  statusId: PropTypes.string.isRequired,
++  reactions: ImmutablePropTypes.list.isRequired,
++  addReaction: PropTypes.func,
++  canReact: PropTypes.bool.isRequired,
++  removeReaction: PropTypes.func,
++};
++
++class Reaction extends ImmutablePureComponent {
++
++  static propTypes = {
++    statusId: PropTypes.string,
++    reaction: ImmutablePropTypes.map.isRequired,
++    addReaction: PropTypes.func,
++    removeReaction: PropTypes.func,
++    canReact: PropTypes.bool.isRequired,
++    style: PropTypes.object,
++  };
++
++  state = {
++    hovered: false,
++  };
++
++  handleClick = () => {
++    const { reaction, statusId, addReaction, removeReaction, canReact } = this.props;
++    if (!canReact) return;
++
++    if (reaction.get('me') && removeReaction) {
++      removeReaction(statusId, reaction.get('name'));
++    } else if (addReaction) {
++      addReaction(statusId, reaction.get('name'));
++    }
++  };
++
++  handleMouseEnter = () => this.setState({ hovered: true });
++
++  handleMouseLeave = () => this.setState({ hovered: false });
++
++  render() {
++    const { reaction } = this.props;
++
++    return (
++      <animated.button
++        type='button'
++        className={classNames('reactions-bar__item', { active: reaction.get('me') })}
++        onClick={this.handleClick}
++        onMouseEnter={this.handleMouseEnter}
++        onMouseLeave={this.handleMouseLeave}
++        style={this.props.style}
++      >
++        <span className='reactions-bar__item__emoji'>
++          <Emoji
++            hovered={this.state.hovered}
++            emoji={reaction.get('name')}
++            url={reaction.get('url')}
++            staticUrl={reaction.get('static_url')}
++          />
++        </span>
++        <span className='reactions-bar__item__count'>
++          <AnimatedNumber value={reaction.get('count')} />
++        </span>
++      </animated.button>
++    );
++  }
++
++}
++
++export class Emoji extends PureComponent {
++
++  static propTypes = {
++    emoji: PropTypes.string.isRequired,
++    hovered: PropTypes.bool.isRequired,
++    url: PropTypes.string,
++    staticUrl: PropTypes.string,
++  };
++
++  render() {
++    const { emoji, hovered, url, staticUrl } = this.props;
++
++    if (unicodeMapping[emoji]) {
++      const { filename, shortCode } = unicodeMapping[this.props.emoji];
++      const title = shortCode ? `:${shortCode}:` : '';
++
++      return (
++        <img
++          draggable='false'
++          className='emojione'
++          alt={emoji}
++          title={title}
++          src={`${assetHost}/emoji/${filename}.svg`}
++        />
++      );
++    } else {
++      const filename = (autoPlayGif || hovered) ? url : staticUrl;
++      const shortCode = `:${emoji}:`;
++
++      return (
++        <img
++          draggable='false'
++          className='emojione custom-emoji'
++          alt={shortCode}
++          title={shortCode}
++          src={filename}
++        />
++      );
++    }
++  }
++
++}
++
++export class HoverableEmoji extends PureComponent {
++
++  static propTypes = {
++    emoji: PropTypes.string.isRequired,
++    url: PropTypes.string,
++    staticUrl: PropTypes.string,
++  };
++
++  state = {
++    hovered: false,
++  };
++
++  handleMouseEnter = () => this.setState({ hovered: true });
++  handleMouseLeave = () => this.setState({ hovered: false });
++
++  render() {
++    const { emoji, url, staticUrl } = this.props;
++
++    return (<Emoji
++      hovered={this.state.hovered}
++      emoji={emoji}
++      url={url}
++      staticUrl={staticUrl}
++    />);
++  }
++}
+diff --git a/app/javascript/mastodon/containers/status_container.jsx b/app/javascript/mastodon/containers/status_container.jsx
+index 0fb5f25560..2f33109f89 100644
+--- a/app/javascript/mastodon/containers/status_container.jsx
++++ b/app/javascript/mastodon/containers/status_container.jsx
+@@ -26,6 +26,8 @@ import {
+   unbookmark,
+   pin,
+   unpin,
++  addReaction,
++  removeReaction,
+ } from '../actions/interactions';
+ import { openModal } from '../actions/modal';
+ import { initMuteModal } from '../actions/mutes';
+@@ -96,6 +98,14 @@ const mapDispatchToProps = (dispatch, { contextType }) => ({
+     }
+   },
+ 
++  onReactionAdd (statusId, name, url) {
++    dispatch(addReaction(statusId, name, url));
++  },
++
++  onReactionRemove (statusId, name) {
++    dispatch(removeReaction(statusId, name));
++  },
++
+   onEmbed (status) {
+     dispatch(openModal({
+       modalType: 'EMBED',
+diff --git a/app/javascript/mastodon/features/compose/components/emoji_picker_dropdown.jsx b/app/javascript/mastodon/features/compose/components/emoji_picker_dropdown.jsx
+index 1d96427f6b..ce60a4dae2 100644
+--- a/app/javascript/mastodon/features/compose/components/emoji_picker_dropdown.jsx
++++ b/app/javascript/mastodon/features/compose/components/emoji_picker_dropdown.jsx
+@@ -316,6 +316,9 @@ class EmojiPickerDropdown extends PureComponent {
+     onPickEmoji: PropTypes.func.isRequired,
+     onSkinTone: PropTypes.func.isRequired,
+     skinTone: PropTypes.number.isRequired,
++    title: PropTypes.string,
++    icon: PropTypes.node,
++    disabled: PropTypes.bool,
+   };
+ 
+   state = {
+@@ -350,7 +353,7 @@ class EmojiPickerDropdown extends PureComponent {
+   };
+ 
+   onToggle = (e) => {
+-    if (!this.state.loading && (!e.key || e.key === 'Enter')) {
++    if (!this.state.disabled && !this.state.loading && (!e.key || e.key === 'Enter')) {
+       if (this.state.active) {
+         this.onHideDropdown();
+       } else {
+@@ -378,19 +381,17 @@ class EmojiPickerDropdown extends PureComponent {
+   };
+ 
+   render() {
+-    const { intl, onPickEmoji, onSkinTone, skinTone, frequentlyUsedEmojis } = this.props;
+-    const title = intl.formatMessage(messages.emoji);
++    const { intl, onPickEmoji, onSkinTone, skinTone, frequentlyUsedEmojis, title } = this.props;
+     const { active, loading, placement } = this.state;
+ 
+     return (
+       <div className='emoji-picker-dropdown' onKeyDown={this.handleKeyDown} ref={this.setTargetRef}>
+         <IconButton
+-          title={title}
++          title={title || intl.formatMessage(messages.emoji)}
+           aria-expanded={active}
+           active={active}
+           iconComponent={MoodIcon}
+           onClick={this.onToggle}
+-          inverted
+         />
+ 
+         <Overlay show={active} placement={placement} flip target={this.findTarget} popperConfig={{ strategy: 'fixed', onFirstUpdate: this.handleOverlayEnter }}>
+diff --git a/app/javascript/mastodon/features/notifications/components/column_settings.jsx b/app/javascript/mastodon/features/notifications/components/column_settings.jsx
+index 9616adcb93..4c4f48e3e6 100644
+--- a/app/javascript/mastodon/features/notifications/components/column_settings.jsx
++++ b/app/javascript/mastodon/features/notifications/components/column_settings.jsx
+@@ -121,6 +121,17 @@ class ColumnSettings extends PureComponent {
+           </div>
+         </section>
+ 
++        <section role='group' aria-labelledby='notifications-reaction'>
++          <h3 id='notifications-reaction'><FormattedMessage id='notifications.column_settings.reaction' defaultMessage='Reactions:' /></h3>
++
++          <div className='column-settings__row'>
++            <SettingToggle disabled={browserPermission === 'denied'} prefix='notifications_desktop' settings={settings} settingPath={['alerts', 'reaction']} onChange={onChange} label={alertStr} />
++            {showPushSettings && <SettingToggle prefix='notifications_push' settings={pushSettings} settingPath={['alerts', 'reaction']} onChange={this.onPushChange} label={pushStr} />}
++            <SettingToggle prefix='notifications' settings={settings} settingPath={['shows', 'reaction']} onChange={onChange} label={showStr} />
++            <SettingToggle prefix='notifications' settings={settings} settingPath={['sounds', 'reaction']} onChange={onChange} label={soundStr} />
++          </div>
++        </section>
++
+         <section role='group' aria-labelledby='notifications-mention'>
+           <h3 id='notifications-mention'><FormattedMessage id='notifications.column_settings.mention' defaultMessage='Mentions:' /></h3>
+ 
+diff --git a/app/javascript/mastodon/features/notifications/components/notification.jsx b/app/javascript/mastodon/features/notifications/components/notification.jsx
+index 86431f62fd..8abe465802 100644
+--- a/app/javascript/mastodon/features/notifications/components/notification.jsx
++++ b/app/javascript/mastodon/features/notifications/components/notification.jsx
+@@ -221,6 +221,31 @@ class Notification extends ImmutablePureComponent {
+     );
+   }
+ 
++  renderReaction (notification) {
++    return (
++      <StatusQuoteManager
++        containerId={notification.get('id')}
++        hidden={!!this.props.hidden}
++        id={notification.get('status')}
++        account={notification.get('account')}
++        prepend='reaction'
++        muted
++        withDismiss
++        notification={notification}
++        onMoveDown={this.handleMoveDown}
++        onMoveUp={this.handleMoveUp}
++        onMention={this.props.onMention}
++        contextType='notifications'
++        getScrollPosition={this.props.getScrollPosition}
++        updateScrollBottom={this.props.updateScrollBottom}
++        cachedMediaWidth={this.props.cachedMediaWidth}
++        cacheMediaWidth={this.props.cacheMediaWidth}
++        onUnmount={this.props.onUnmount}
++        unread={this.props.unread}
++      />
++    );
++  }
++
+   renderReblog (notification, link) {
+     const { intl, unread } = this.props;
+ 
+@@ -469,6 +494,8 @@ class Notification extends ImmutablePureComponent {
+       return this.renderMention(notification);
+     case 'favourite':
+       return this.renderFavourite(notification, link);
++    case 'reaction':
++      return this.renderReaction(notification);
+     case 'reblog':
+       return this.renderReblog(notification, link);
+     case 'status':
+diff --git a/app/javascript/mastodon/features/notifications_v2/components/notification_group.tsx b/app/javascript/mastodon/features/notifications_v2/components/notification_group.tsx
+index d5eb851985..b3b3c12f99 100644
+--- a/app/javascript/mastodon/features/notifications_v2/components/notification_group.tsx
++++ b/app/javascript/mastodon/features/notifications_v2/components/notification_group.tsx
+@@ -16,6 +16,7 @@ import { NotificationFollowRequest } from './notification_follow_request';
+ import { NotificationMention } from './notification_mention';
+ import { NotificationModerationWarning } from './notification_moderation_warning';
+ import { NotificationPoll } from './notification_poll';
++import { NotificationReaction } from './notification_reaction';
+ import { NotificationReblog } from './notification_reblog';
+ import { NotificationSeveredRelationships } from './notification_severed_relationships';
+ import { NotificationStatus } from './notification_status';
+@@ -79,6 +80,14 @@ export const NotificationGroup: React.FC<{
+         />
+       );
+       break;
++    case 'reaction':
++      content = (
++        <NotificationReaction
++          unread={unread}
++          notification={notificationGroup}
++        />
++      );
++      break;
+     case 'severed_relationships':
+       content = (
+         <NotificationSeveredRelationships
+diff --git a/app/javascript/mastodon/features/notifications_v2/components/notification_reaction.tsx b/app/javascript/mastodon/features/notifications_v2/components/notification_reaction.tsx
+new file mode 100644
+index 0000000000..cb05cb00e3
+--- /dev/null
++++ b/app/javascript/mastodon/features/notifications_v2/components/notification_reaction.tsx
+@@ -0,0 +1,48 @@
++import { FormattedMessage } from 'react-intl';
++
++import MoodIcon from '@/material-icons/400-24px/mood.svg?react';
++import type { NotificationGroupReaction } from 'mastodon/models/notification_group';
++
++import type { LabelRenderer } from './notification_group_with_status';
++import { NotificationGroupWithStatus } from './notification_group_with_status';
++
++const labelRenderer: LabelRenderer = (displayedName, total) => {
++  if (total === 1)
++    return (
++      <FormattedMessage
++        id='notification.reaction'
++        defaultMessage='{name} reacted to your status'
++        values={{ name: displayedName }}
++      />
++    );
++
++  return (
++    <FormattedMessage
++      id='notification.reaction.name_and_others'
++      defaultMessage='{name} and {count, plural, one {# other} other {# others}} reacted to your post'
++      values={{
++        name: displayedName,
++        count: total - 1,
++      }}
++    />
++  );
++};
++
++export const NotificationReaction: React.FC<{
++  notification: NotificationGroupReaction;
++  unread: boolean;
++}> = ({ notification, unread }) => {
++  return (
++    <NotificationGroupWithStatus
++      type='reaction'
++      icon={MoodIcon}
++      iconId='react'
++      accountIds={notification.sampleAccountIds}
++      statusId={notification.statusId}
++      timestamp={notification.latest_page_notification_at}
++      count={notification.notifications_count}
++      labelRenderer={labelRenderer}
++      unread={unread}
++    />
++  );
++};
+diff --git a/app/javascript/mastodon/features/notifications_v2/filter_bar.tsx b/app/javascript/mastodon/features/notifications_v2/filter_bar.tsx
+index 37d2d864bb..a5341fcb7e 100644
+--- a/app/javascript/mastodon/features/notifications_v2/filter_bar.tsx
++++ b/app/javascript/mastodon/features/notifications_v2/filter_bar.tsx
+@@ -5,6 +5,7 @@ import { defineMessages, FormattedMessage, useIntl } from 'react-intl';
+ 
+ import HomeIcon from '@/material-icons/400-24px/home-fill.svg?react';
+ import InsertChartIcon from '@/material-icons/400-24px/insert_chart.svg?react';
++import MoodIcon from '@/material-icons/400-24px/mood.svg?react';
+ import PersonAddIcon from '@/material-icons/400-24px/person_add.svg?react';
+ import RepeatIcon from '@/material-icons/400-24px/repeat.svg?react';
+ import ReplyAllIcon from '@/material-icons/400-24px/reply_all.svg?react';
+@@ -23,6 +24,10 @@ const tooltips = defineMessages({
+     id: 'notifications.filter.favourites',
+     defaultMessage: 'Favorites',
+   },
++  reactions: {
++    id: 'notifications.filter.reactions',
++    defaultMessage: 'Reactions',
++  },
+   boosts: { id: 'notifications.filter.boosts', defaultMessage: 'Boosts' },
+   polls: { id: 'notifications.filter.polls', defaultMessage: 'Poll results' },
+   follows: { id: 'notifications.filter.follows', defaultMessage: 'Follows' },
+@@ -91,6 +96,14 @@ export const FilterBar: React.FC = () => {
+         >
+           <Icon id='star' icon={StarIcon} />
+         </BarButton>
++        <BarButton
++          selectedFilter={selectedFilter}
++          type='reaction'
++          key='reaction'
++          title={intl.formatMessage(tooltips.reactions)}
++        >
++          <Icon id='react' icon={MoodIcon} />
++        </BarButton>
+         <BarButton
+           selectedFilter={selectedFilter}
+           type='reblog'
+diff --git a/app/javascript/mastodon/features/status/components/action_bar.jsx b/app/javascript/mastodon/features/status/components/action_bar.jsx
+index 81f8163fff..e9f53baba4 100644
+--- a/app/javascript/mastodon/features/status/components/action_bar.jsx
++++ b/app/javascript/mastodon/features/status/components/action_bar.jsx
+@@ -8,6 +8,7 @@ import classNames from 'classnames';
+ import ImmutablePropTypes from 'react-immutable-proptypes';
+ import { connect } from 'react-redux';
+ 
++import AddReactionIcon from '@/material-icons/400-24px/add_reaction.svg?react';
+ import BookmarkIcon from '@/material-icons/400-24px/bookmark-fill.svg?react';
+ import BookmarkBorderIcon from '@/material-icons/400-24px/bookmark.svg?react';
+ import MoreHorizIcon from '@/material-icons/400-24px/more_horiz.svg?react';
+@@ -25,7 +26,8 @@ import { PERMISSION_MANAGE_USERS, PERMISSION_MANAGE_FEDERATION } from 'mastodon/
+ 
+ import { IconButton } from '../../../components/icon_button';
+ import { Dropdown } from 'mastodon/components/dropdown_menu';
+-import { me } from '../../../initial_state';
++import { me, maxReactions } from '../../../initial_state';
++import EmojiPickerDropdown from '../../compose/containers/emoji_picker_dropdown_container';
+ 
+ const messages = defineMessages({
+   delete: { id: 'status.delete', defaultMessage: 'Delete' },
+@@ -39,6 +41,7 @@ const messages = defineMessages({
+   cancel_reblog_private: { id: 'status.cancel_reblog_private', defaultMessage: 'Unboost' },
+   cannot_reblog: { id: 'status.cannot_reblog', defaultMessage: 'This post cannot be boosted' },
+   favourite: { id: 'status.favourite', defaultMessage: 'Favorite' },
++  react: { id: 'status.react', defaultMessage: 'React' },
+   removeFavourite: { id: 'status.remove_favourite', defaultMessage: 'Remove from favorites' },
+   bookmark: { id: 'status.bookmark', defaultMessage: 'Bookmark' },
+   removeBookmark: { id: 'status.remove_bookmark', defaultMessage: 'Remove bookmark' },
+@@ -75,6 +78,7 @@ class ActionBar extends PureComponent {
+     onReply: PropTypes.func.isRequired,
+     onReblog: PropTypes.func.isRequired,
+     onFavourite: PropTypes.func.isRequired,
++    onReactionAdd: PropTypes.func.isRequired,
+     onBookmark: PropTypes.func.isRequired,
+     onDelete: PropTypes.func.isRequired,
+     onEdit: PropTypes.func.isRequired,
+@@ -105,6 +109,10 @@ class ActionBar extends PureComponent {
+     this.props.onFavourite(this.props.status);
+   };
+ 
++  handleEmojiPick = data => {
++    this.props.onReactionAdd(this.props.status.get('id'), data.native.replace(/:/g, ''), data.imageUrl);
++  };
++
+   handleBookmarkClick = (e) => {
+     this.props.onBookmark(this.props.status, e);
+   };
+@@ -306,6 +314,8 @@ class ActionBar extends PureComponent {
+       reblogIconComponent = RepeatDisabledIcon;
+     }
+ 
++    const canReact = signedIn && status.get('reactions').filter(r => r.get('count') > 0 && r.get('me')).size < maxReactions;
++
+     const bookmarkTitle = intl.formatMessage(status.get('bookmarked') ? messages.removeBookmark : messages.bookmark);
+     const favouriteTitle = intl.formatMessage(status.get('favourited') ? messages.removeFavourite : messages.favourite);
+ 
+@@ -314,6 +324,7 @@ class ActionBar extends PureComponent {
+         <div className='detailed-status__button'><IconButton title={intl.formatMessage(messages.reply)} icon={status.get('in_reply_to_account_id') === status.getIn(['account', 'id']) ? 'reply' : replyIcon} iconComponent={status.get('in_reply_to_account_id') === status.getIn(['account', 'id']) ? ReplyIcon : replyIconComponent}  onClick={this.handleReplyClick} /></div>
+         <div className='detailed-status__button'><IconButton className={classNames({ reblogPrivate })} disabled={!publicStatus && !reblogPrivate} active={status.get('reblogged')} title={reblogTitle} icon='retweet' iconComponent={reblogIconComponent} onClick={this.handleReblogClick} /></div>
+         <div className='detailed-status__button'><IconButton className='star-icon' animate active={status.get('favourited')} title={favouriteTitle} icon='star' iconComponent={status.get('favourited') ? StarIcon : StarBorderIcon} onClick={this.handleFavouriteClick} /></div>
++        <div className='detailed-status__button'><EmojiPickerDropdown onPickEmoji={this.handleEmojiPick} title={intl.formatMessage(messages.react)} icon={AddReactionIcon} disabled={!canReact} /></div>
+         <div className='detailed-status__button'><IconButton className='bookmark-icon' disabled={!signedIn} active={status.get('bookmarked')} title={bookmarkTitle} icon='bookmark' iconComponent={status.get('bookmarked') ? BookmarkIcon : BookmarkBorderIcon} onClick={this.handleBookmarkClick} /></div>
+ 
+         <div className='detailed-status__action-bar-dropdown'>
+diff --git a/app/javascript/mastodon/features/status/components/detailed_status.tsx b/app/javascript/mastodon/features/status/components/detailed_status.tsx
+index ca7ea9a19b..8246fc563f 100644
+--- a/app/javascript/mastodon/features/status/components/detailed_status.tsx
++++ b/app/javascript/mastodon/features/status/components/detailed_status.tsx
+@@ -27,10 +27,12 @@ import MediaGallery from 'mastodon/components/media_gallery';
+ import { PictureInPicturePlaceholder } from 'mastodon/components/picture_in_picture_placeholder';
+ import StatusContent from 'mastodon/components/status_content';
+ import { QuotedStatus } from 'mastodon/components/status_quoted';
++import { StatusReactions } from 'mastodon/components/status_reactions';
+ import { VisibilityIcon } from 'mastodon/components/visibility_icon';
+ import { Audio } from 'mastodon/features/audio';
+ import scheduleIdleTask from 'mastodon/features/ui/util/schedule_idle_task';
+ import { Video } from 'mastodon/features/video';
++import { useIdentity } from 'mastodon/identity_context';
+ 
+ import Card from './card';
+ 
+@@ -54,6 +56,8 @@ export const DetailedStatus: React.FC<{
+   pictureInPicture: any;
+   onToggleHidden?: (status: any) => void;
+   onToggleMediaVisibility?: () => void;
++  onReactionAdd?: (status: any, name: string, url: string) => void;
++  onReactionRemove?: (status: any, name: string) => void;
+ }> = ({
+   status,
+   onOpenMedia,
+@@ -68,12 +72,16 @@ export const DetailedStatus: React.FC<{
+   pictureInPicture,
+   onToggleMediaVisibility,
+   onToggleHidden,
++  onReactionAdd,
++  onReactionRemove,
+ }) => {
+   const properStatus = status?.get('reblog') ?? status;
+   const [height, setHeight] = useState(0);
+   const [showDespiteFilter, setShowDespiteFilter] = useState(false);
+   const nodeRef = useRef<HTMLDivElement>();
+ 
++  const { signedIn } = useIdentity();
++
+   const handleOpenVideo = useCallback(
+     (options: VideoModalOptions) => {
+       const lang = (status.getIn(['translation', 'language']) ||
+@@ -390,6 +398,14 @@ export const DetailedStatus: React.FC<{
+           </>
+         )}
+ 
++        <StatusReactions
++          statusId={status.get('id')}
++          reactions={status.get('reactions')}
++          addReaction={onReactionAdd}
++          removeReaction={onReactionRemove}
++          canReact={signedIn}
++        />
++
+         <div className='detailed-status__meta'>
+           <div className='detailed-status__meta__line'>
+             <a
+diff --git a/app/javascript/mastodon/features/status/index.jsx b/app/javascript/mastodon/features/status/index.jsx
+index 0f02e7b50f..408a9d2937 100644
+--- a/app/javascript/mastodon/features/status/index.jsx
++++ b/app/javascript/mastodon/features/status/index.jsx
+@@ -43,6 +43,8 @@ import {
+   toggleReblog,
+   pin,
+   unpin,
++  addReaction,
++  removeReaction,
+ } from '../../actions/interactions';
+ import { openModal } from '../../actions/modal';
+ import { initMuteModal } from '../../actions/mutes';
+@@ -194,6 +196,19 @@ class Status extends ImmutablePureComponent {
+     }
+   };
+ 
++  handleReactionAdd = (statusId, name, url) => {
++    const { dispatch, identity } = this.props;
++    const { signedIn } = identity;
++
++    if (signedIn) {
++      dispatch(addReaction(statusId, name, url));
++    }
++  };
++
++  handleReactionRemove = (statusId, name) => {
++    this.props.dispatch(removeReaction(statusId, name));
++  };
++
+   handlePin = (status) => {
+     if (status.get('pinned')) {
+       this.props.dispatch(unpin(status));
+@@ -623,6 +638,8 @@ class Status extends ImmutablePureComponent {
+                   status={status}
+                   onOpenVideo={this.handleOpenVideo}
+                   onOpenMedia={this.handleOpenMedia}
++                  onReactionAdd={this.handleReactionAdd}
++                  onReactionRemove={this.handleReactionRemove}
+                   onToggleHidden={this.handleToggleHidden}
+                   onTranslate={this.handleTranslate}
+                   domain={domain}
+@@ -636,6 +653,7 @@ class Status extends ImmutablePureComponent {
+                   status={status}
+                   onReply={this.handleReplyClick}
+                   onFavourite={this.handleFavouriteClick}
++                  onReactionAdd={this.handleReactionAdd}
+                   onReblog={this.handleReblogClick}
+                   onBookmark={this.handleBookmarkClick}
+                   onDelete={this.handleDeleteClick}
+diff --git a/app/javascript/mastodon/initial_state.js b/app/javascript/mastodon/initial_state.js
+index 093422ac87..a9d251a1a8 100644
+--- a/app/javascript/mastodon/initial_state.js
++++ b/app/javascript/mastodon/initial_state.js
+@@ -24,6 +24,7 @@
+  * @property {boolean} limited_federation_mode
+  * @property {string} locale
+  * @property {string | null} mascot
++ * @property {number} max_reactions
+  * @property {string=} me
+  * @property {string=} moved_to_account_id
+  * @property {string=} owner
+@@ -99,6 +100,7 @@ export const expandSpoilers = getMeta('expand_spoilers');
+ export const forceSingleColumn = !getMeta('advanced_layout');
+ export const limitedFederationMode = getMeta('limited_federation_mode');
+ export const mascot = getMeta('mascot');
++export const maxReactions = getMeta('max_reactions');
+ export const me = getMeta('me');
+ export const movedToAccountId = getMeta('moved_to_account_id');
+ export const owner = getMeta('owner');
+diff --git a/app/javascript/mastodon/models/notification_group.ts b/app/javascript/mastodon/models/notification_group.ts
+index d98e755aa2..bcb1ff0c18 100644
+--- a/app/javascript/mastodon/models/notification_group.ts
++++ b/app/javascript/mastodon/models/notification_group.ts
+@@ -33,6 +33,7 @@ interface BaseNotification<Type extends NotificationType>
+ 
+ export type NotificationGroupFavourite =
+   BaseNotificationWithStatus<'favourite'>;
++export type NotificationGroupReaction = BaseNotificationWithStatus<'reaction'>;
+ export type NotificationGroupReblog = BaseNotificationWithStatus<'reblog'>;
+ export type NotificationGroupStatus = BaseNotificationWithStatus<'status'>;
+ export type NotificationGroupMention = BaseNotificationWithStatus<'mention'>;
+@@ -84,6 +85,7 @@ export interface NotificationGroupAdminReport
+ 
+ export type NotificationGroup =
+   | NotificationGroupFavourite
++  | NotificationGroupReaction
+   | NotificationGroupReblog
+   | NotificationGroupStatus
+   | NotificationGroupMention
+@@ -134,6 +136,7 @@ export function createNotificationGroupFromJSON(
+ 
+   switch (group.type) {
+     case 'favourite':
++    case 'reaction':
+     case 'reblog':
+     case 'status':
+     case 'mention':
+@@ -206,6 +209,7 @@ export function createNotificationGroupFromNotificationJSON(
+ 
+   switch (notification.type) {
+     case 'favourite':
++    case 'reaction':
+     case 'reblog':
+     case 'status':
+     case 'mention':
+diff --git a/app/javascript/mastodon/models/reaction.ts b/app/javascript/mastodon/models/reaction.ts
+new file mode 100644
+index 0000000000..e7de45e008
+--- /dev/null
++++ b/app/javascript/mastodon/models/reaction.ts
+@@ -0,0 +1,6 @@
++import type { RecordOf } from 'immutable';
++
++import type { ApiStatusReactionJSON } from 'mastodon/api_types/reactions';
++
++type StatusReactionShape = Required<ApiStatusReactionJSON>;
++export type StatusReaction = RecordOf<StatusReactionShape>;
+diff --git a/app/javascript/mastodon/reducers/index.ts b/app/javascript/mastodon/reducers/index.ts
+index cbf22b3118..96025a3814 100644
+--- a/app/javascript/mastodon/reducers/index.ts
++++ b/app/javascript/mastodon/reducers/index.ts
+@@ -34,6 +34,7 @@ import { searchReducer } from './search';
+ import server from './server';
+ import settings from './settings';
+ import status_lists from './status_lists';
++import status_reactions from './status_reactions';
+ import statuses from './statuses';
+ import { suggestionsReducer } from './suggestions';
+ import { followedTagsReducer } from './tags';
+@@ -77,6 +78,7 @@ const reducers = {
+   markers: markersReducer,
+   picture_in_picture: pictureInPictureReducer,
+   history,
++  status_reactions,
+   notificationPolicy: notificationPolicyReducer,
+   notificationRequests: notificationRequestsReducer,
+   navigation: navigationReducer,
+diff --git a/app/javascript/mastodon/reducers/status_reactions.js b/app/javascript/mastodon/reducers/status_reactions.js
+new file mode 100644
+index 0000000000..3ba6a83b39
+--- /dev/null
++++ b/app/javascript/mastodon/reducers/status_reactions.js
+@@ -0,0 +1,57 @@
++import { Map as ImmutableMap, OrderedSet as ImmutableOrderedSet } from 'immutable';
++
++import {
++  REACTIONS_FETCH_SUCCESS,
++  REACTIONS_EXPAND_SUCCESS,
++  REACTIONS_FETCH_REQUEST,
++  REACTIONS_EXPAND_REQUEST,
++  REACTIONS_FETCH_FAIL,
++  REACTIONS_EXPAND_FAIL,
++} from '../actions/interactions';
++
++const initialState = ImmutableMap({
++  reactions: ImmutableMap({
++    next: null,
++    isLoading: false,
++    items: ImmutableOrderedSet(),
++  }),
++});
++
++const normalizeList = (state, path, reactions, next) => {
++  const filteredReactions = reactions.map(v => {
++    v.account = v.account.id;
++    return v;
++  });
++  return state.setIn(path, ImmutableMap({
++    next,
++    items: ImmutableOrderedSet(filteredReactions),
++    isLoading: false,
++  }));
++};
++
++const appendToList = (state, path, reactions, next) => {
++  const filteredReactions = reactions.map(v => {
++    v.account = v.account.id;
++    return v;
++  });
++  return state.updateIn(path, map => {
++    return map.set('next', next).set('isLoading', false).update('items', list => list.concat(filteredReactions));
++  });
++};
++
++export default function statusReactions(state = initialState, action) {
++  switch(action.type) {
++  case REACTIONS_FETCH_SUCCESS:
++    return normalizeList(state, ['reactions', action.id], action.reactions, action.next);
++  case REACTIONS_EXPAND_SUCCESS:
++    return appendToList(state, ['reactions', action.id], action.reactions, action.next);
++  case REACTIONS_FETCH_REQUEST:
++  case REACTIONS_EXPAND_REQUEST:
++    return state.setIn(['reactions', action.id, 'isLoading'], true);
++  case REACTIONS_FETCH_FAIL:
++  case REACTIONS_EXPAND_FAIL:
++    return state.setIn(['reactions', action.id, 'isLoading'], false);
++  default:
++    return state;
++  }
++}
+diff --git a/app/javascript/mastodon/reducers/statuses.js b/app/javascript/mastodon/reducers/statuses.js
+index 7fb806e3fc..70f9b60c1c 100644
+--- a/app/javascript/mastodon/reducers/statuses.js
++++ b/app/javascript/mastodon/reducers/statuses.js
+@@ -13,6 +13,11 @@ import {
+   BOOKMARK_FAIL,
+   UNBOOKMARK_REQUEST,
+   UNBOOKMARK_FAIL,
++  REACTION_UPDATE,
++  REACTION_ADD_FAIL,
++  REACTION_REMOVE_FAIL,
++  REACTION_ADD_REQUEST,
++  REACTION_REMOVE_REQUEST,
+ } from '../actions/interactions';
+ import {
+   reblog,
+@@ -43,6 +48,43 @@ const deleteStatus = (state, id, references) => {
+   return state.delete(id);
+ };
+ 
++const updateReaction = (state, id, name, updater) => state.update(
++  id,
++  status => status.update(
++    'reactions',
++    reactions => {
++      const index = reactions.findIndex(reaction => reaction.get('name') === name);
++      if (index > -1) {
++        return reactions.update(index, reaction => updater(reaction));
++      } else {
++        return reactions.push(updater(fromJS({ name, count: 0 })));
++      }
++    },
++  ),
++);
++
++const updateReactionCount = (state, reaction) => updateReaction(state, reaction.status_id, reaction.name, x => x.set('count', reaction.count));
++
++// The url parameter is only used when adding a new custom emoji reaction
++// (one that wasn't in the reactions list before) because we don't have its
++// URL yet.  In all other cases, it's undefined.
++const addReaction = (state, id, name, url) => updateReaction(
++  state,
++  id,
++  name,
++  x => x.set('me', true)
++    .update('count', n => n + 1)
++    .update('url', old => old ? old : url)
++    .update('static_url', old => old ? old : url),
++);
++
++const removeReaction = (state, id, name) => updateReaction(
++  state,
++  id,
++  name,
++  x => x.set('me', false).update('count', n => n - 1),
++);
++
+ const statusTranslateSuccess = (state, id, translation) => {
+   return state.withMutations(map => {
+     map.setIn([id, 'translation'], fromJS(normalizeStatusTranslation(translation, map.get(id))));
+@@ -105,6 +147,14 @@ export default function statuses(state = initialState, action) {
+     return state.get(action.status.get('id')) === undefined ? state : state.setIn([action.status.get('id'), 'bookmarked'], false);
+   case UNBOOKMARK_FAIL:
+     return state.get(action.status.get('id')) === undefined ? state : state.setIn([action.status.get('id'), 'bookmarked'], true);
++  case REACTION_UPDATE:
++    return updateReactionCount(state, action.reaction);
++  case REACTION_ADD_REQUEST:
++  case REACTION_REMOVE_FAIL:
++    return addReaction(state, action.id, action.name, action.url);
++  case REACTION_REMOVE_REQUEST:
++  case REACTION_ADD_FAIL:
++    return removeReaction(state, action.id, action.name);
+   case STATUS_MUTE_SUCCESS:
+     return state.setIn([action.id, 'muted'], true);
+   case STATUS_UNMUTE_SUCCESS:
+diff --git a/app/javascript/material-icons/400-24px/add_reaction-fill.svg b/app/javascript/material-icons/400-24px/add_reaction-fill.svg
+new file mode 100644
+index 0000000000..77aace24b0
+--- /dev/null
++++ b/app/javascript/material-icons/400-24px/add_reaction-fill.svg
+@@ -0,0 +1 @@
++<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24"><path d="M480-480Zm0 400q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q43 0 83 8.5t77 24.5v90q-35-20-75.5-31.5T480-800q-133 0-226.5 93.5T160-480q0 133 93.5 226.5T480-160q133 0 226.5-93.5T800-480q0-32-6.5-62T776-600h86q9 29 13.5 58.5T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm320-600v-80h-80v-80h80v-80h80v80h80v80h-80v80h-80ZM620-520q25 0 42.5-17.5T680-580q0-25-17.5-42.5T620-640q-25 0-42.5 17.5T560-580q0 25 17.5 42.5T620-520Zm-280 0q25 0 42.5-17.5T400-580q0-25-17.5-42.5T340-640q-25 0-42.5 17.5T280-580q0 25 17.5 42.5T340-520Zm140 260q68 0 123.5-38.5T684-400H276q25 63 80.5 101.5T480-260Z"/></svg>
+\ No newline at end of file
+diff --git a/app/javascript/material-icons/400-24px/add_reaction.svg b/app/javascript/material-icons/400-24px/add_reaction.svg
+new file mode 100644
+index 0000000000..77aace24b0
+--- /dev/null
++++ b/app/javascript/material-icons/400-24px/add_reaction.svg
+@@ -0,0 +1 @@
++<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24"><path d="M480-480Zm0 400q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q43 0 83 8.5t77 24.5v90q-35-20-75.5-31.5T480-800q-133 0-226.5 93.5T160-480q0 133 93.5 226.5T480-160q133 0 226.5-93.5T800-480q0-32-6.5-62T776-600h86q9 29 13.5 58.5T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm320-600v-80h-80v-80h80v-80h80v80h80v80h-80v80h-80ZM620-520q25 0 42.5-17.5T680-580q0-25-17.5-42.5T620-640q-25 0-42.5 17.5T560-580q0 25 17.5 42.5T620-520Zm-280 0q25 0 42.5-17.5T400-580q0-25-17.5-42.5T340-640q-25 0-42.5 17.5T280-580q0 25 17.5 42.5T340-520Zm140 260q68 0 123.5-38.5T684-400H276q25 63 80.5 101.5T480-260Z"/></svg>
+\ No newline at end of file
+diff --git a/app/javascript/styles/mastodon/components.scss b/app/javascript/styles/mastodon/components.scss
+index 70b0da95be..4683caf397 100644
+--- a/app/javascript/styles/mastodon/components.scss
++++ b/app/javascript/styles/mastodon/components.scss
+@@ -1481,6 +1481,7 @@ body > [data-popper-placement] {
+ 
+     .status__content,
+     .status__action-bar,
++    .reactions-bar,
+     .media-gallery,
+     .video-player,
+     .audio-player,
+@@ -4868,6 +4869,10 @@ a.status-card {
+   text-align: center;
+ }
+ 
++.detailed-status__button .emoji-button {
++  padding: 0;
++}
++
+ .column-settings {
+   display: flex;
+   flex-direction: column;
+@@ -8807,6 +8812,8 @@ noscript {
+   }
+ 
+   &--empty {
++    margin-top: 0;
++
+     .emoji-button {
+       padding: 0;
+     }
+@@ -10635,6 +10642,10 @@ noscript {
+     color: $gold-star;
+   }
+ 
++  &--reaction &__icon {
++    color: $highlight-text-color;
++  }
++
+   &--reblog &__icon {
+     color: $valid-value-color;
+   }
+@@ -10843,6 +10854,7 @@ noscript {
+ 
+   .status__content,
+   .status__action-bar,
++  .reactions-bar,
+   .media-gallery,
+   .video-player,
+   .audio-player,
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Tue, 4 Mar 2025 20:53:20 +0900
+Subject: [PATCH 3/6] Set emoji reaction bar width to 100%
+
+
+diff --git a/app/javascript/styles/mastodon/components.scss b/app/javascript/styles/mastodon/components.scss
+index 4683caf397..208eb633d0 100644
+--- a/app/javascript/styles/mastodon/components.scss
++++ b/app/javascript/styles/mastodon/components.scss
+@@ -1064,6 +1064,13 @@ body > [data-popper-placement] {
+   }
+ }
+ 
++.status,
++.detailed-status {
++  .reactions-bar {
++    width: 100%;
++  }
++}
++
+ .status__content--with-action {
+   cursor: pointer;
+ }
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Sat, 31 Jan 2026 04:51:18 +0900
+Subject: [PATCH 4/6] Fix reaction cancellation not updating display
+
+
+diff --git a/app/javascript/mastodon/actions/interactions.js b/app/javascript/mastodon/actions/interactions.js
+index 8edb87271a..1dc70ab4e2 100644
+--- a/app/javascript/mastodon/actions/interactions.js
++++ b/app/javascript/mastodon/actions/interactions.js
+@@ -631,8 +631,7 @@ export const addReactionFail = (statusId, name, error) => ({
+ export const removeReaction = (statusId, name) => (dispatch, getState) => {
+   dispatch(removeReactionRequest(statusId, name));
+ 
+-  api(getState).post(`/api/v1/statuses/${statusId}/unreact/${encodeURIComponent(name)}`).then((response) => {
+-    dispatch(importFetchedStatus(response.data));
++  api(getState).post(`/api/v1/statuses/${statusId}/unreact/${encodeURIComponent(name)}`).then(() => {
+     dispatch(removeReactionSuccess(statusId, name));
+   }).catch(err => {
+     dispatch(removeReactionFail(statusId, name, err));
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Sat, 31 Jan 2026 05:14:26 +0900
+Subject: [PATCH 5/6] Enforce single reaction per user per status
+
+
+diff --git a/app/javascript/mastodon/components/status_action_bar.jsx b/app/javascript/mastodon/components/status_action_bar.jsx
+index 472eb0930b..bd1f48a226 100644
+--- a/app/javascript/mastodon/components/status_action_bar.jsx
++++ b/app/javascript/mastodon/components/status_action_bar.jsx
+@@ -28,7 +28,7 @@ import { WithRouterPropTypes } from 'mastodon/utils/react_router';
+ 
+ import { Dropdown } from 'mastodon/components/dropdown_menu';
+ import EmojiPickerDropdown from '../features/compose/containers/emoji_picker_dropdown_container';
+-import { me, maxReactions } from '../initial_state';
++import { me } from '../initial_state';
+ 
+ import { IconButton } from './icon_button';
+ 
+@@ -377,7 +377,7 @@ class StatusActionBar extends ImmutablePureComponent {
+       reblogIconComponent = RepeatDisabledIcon;
+     }
+ 
+-    const canReact = permissions && status.get('reactions').filter(r => r.get('count') > 0 && r.get('me')).size < maxReactions;
++    const canReact = permissions && status.get('reactions').filter(r => r.get('count') > 0 && r.get('me')).size < 1;
+     const bookmarkTitle = intl.formatMessage(status.get('bookmarked') ? messages.removeBookmark : messages.bookmark);
+     const favouriteTitle = intl.formatMessage(status.get('favourited') ? messages.removeFavourite : messages.favourite);
+     const isReply = status.get('in_reply_to_account_id') === status.getIn(['account', 'id']);
+diff --git a/app/javascript/mastodon/features/status/components/action_bar.jsx b/app/javascript/mastodon/features/status/components/action_bar.jsx
+index e9f53baba4..df5c9f34f6 100644
+--- a/app/javascript/mastodon/features/status/components/action_bar.jsx
++++ b/app/javascript/mastodon/features/status/components/action_bar.jsx
+@@ -26,7 +26,7 @@ import { PERMISSION_MANAGE_USERS, PERMISSION_MANAGE_FEDERATION } from 'mastodon/
+ 
+ import { IconButton } from '../../../components/icon_button';
+ import { Dropdown } from 'mastodon/components/dropdown_menu';
+-import { me, maxReactions } from '../../../initial_state';
++import { me } from '../../../initial_state';
+ import EmojiPickerDropdown from '../../compose/containers/emoji_picker_dropdown_container';
+ 
+ const messages = defineMessages({
+@@ -314,7 +314,7 @@ class ActionBar extends PureComponent {
+       reblogIconComponent = RepeatDisabledIcon;
+     }
+ 
+-    const canReact = signedIn && status.get('reactions').filter(r => r.get('count') > 0 && r.get('me')).size < maxReactions;
++    const canReact = signedIn && status.get('reactions').filter(r => r.get('count') > 0 && r.get('me')).size < 1;
+ 
+     const bookmarkTitle = intl.formatMessage(status.get('bookmarked') ? messages.removeBookmark : messages.bookmark);
+     const favouriteTitle = intl.formatMessage(status.get('favourited') ? messages.removeFavourite : messages.favourite);
+diff --git a/app/javascript/mastodon/initial_state.js b/app/javascript/mastodon/initial_state.js
+index a9d251a1a8..093422ac87 100644
+--- a/app/javascript/mastodon/initial_state.js
++++ b/app/javascript/mastodon/initial_state.js
+@@ -24,7 +24,6 @@
+  * @property {boolean} limited_federation_mode
+  * @property {string} locale
+  * @property {string | null} mascot
+- * @property {number} max_reactions
+  * @property {string=} me
+  * @property {string=} moved_to_account_id
+  * @property {string=} owner
+@@ -100,7 +99,6 @@ export const expandSpoilers = getMeta('expand_spoilers');
+ export const forceSingleColumn = !getMeta('advanced_layout');
+ export const limitedFederationMode = getMeta('limited_federation_mode');
+ export const mascot = getMeta('mascot');
+-export const maxReactions = getMeta('max_reactions');
+ export const me = getMeta('me');
+ export const movedToAccountId = getMeta('moved_to_account_id');
+ export const owner = getMeta('owner');
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Sat, 31 Jan 2026 05:24:10 +0900
+Subject: [PATCH 6/6] Expose 'disabled' prop on EmojiPickerDropdown component
+
+
+diff --git a/app/javascript/mastodon/features/compose/components/emoji_picker_dropdown.jsx b/app/javascript/mastodon/features/compose/components/emoji_picker_dropdown.jsx
+index ce60a4dae2..50f8f019dd 100644
+--- a/app/javascript/mastodon/features/compose/components/emoji_picker_dropdown.jsx
++++ b/app/javascript/mastodon/features/compose/components/emoji_picker_dropdown.jsx
+@@ -381,7 +381,7 @@ class EmojiPickerDropdown extends PureComponent {
+   };
+ 
+   render() {
+-    const { intl, onPickEmoji, onSkinTone, skinTone, frequentlyUsedEmojis, title } = this.props;
++    const { disabled, intl, onPickEmoji, onSkinTone, skinTone, frequentlyUsedEmojis, title } = this.props;
+     const { active, loading, placement } = this.state;
+ 
+     return (
+@@ -390,6 +390,7 @@ class EmojiPickerDropdown extends PureComponent {
+           title={title || intl.formatMessage(messages.emoji)}
+           aria-expanded={active}
+           active={active}
++          disabled={disabled}
+           iconComponent={MoodIcon}
+           onClick={this.onToggle}
+         />

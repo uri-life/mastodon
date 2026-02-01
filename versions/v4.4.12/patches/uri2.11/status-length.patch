@@ -1,0 +1,92 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Sat, 26 Jul 2025 12:43:55 +0000
+Subject: [PATCH 1/4] Set default max character count to current year
+
+
+diff --git a/app/javascript/mastodon/features/compose/containers/compose_form_container.js b/app/javascript/mastodon/features/compose/containers/compose_form_container.js
+index 5f86426c4d..df80b8d7dd 100644
+--- a/app/javascript/mastodon/features/compose/containers/compose_form_container.js
++++ b/app/javascript/mastodon/features/compose/containers/compose_form_container.js
+@@ -31,7 +31,7 @@ const mapStateToProps = state => ({
+   missingAltText: state.getIn(['compose', 'media_attachments']).some(media => ['image', 'gifv'].includes(media.get('type')) && (media.get('description') ?? '').length === 0),
+   isInReply: state.getIn(['compose', 'in_reply_to']) !== null,
+   lang: state.getIn(['compose', 'language']),
+-  maxChars: state.getIn(['server', 'server', 'configuration', 'statuses', 'max_characters'], 500),
++  maxChars: state.getIn(['server', 'server', 'configuration', 'statuses', 'max_characters'], new Date(Date.now() + 32400000).getUTCFullYear()),
+ });
+ 
+ const mapDispatchToProps = (dispatch, props) => ({
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Sat, 26 Jul 2025 12:44:49 +0000
+Subject: [PATCH 2/4] Increase max characters to 2025
+
+
+diff --git a/app/validators/status_length_validator.rb b/app/validators/status_length_validator.rb
+index 575aaf1869..0dd02702ed 100644
+--- a/app/validators/status_length_validator.rb
++++ b/app/validators/status_length_validator.rb
+@@ -1,7 +1,7 @@
+ # frozen_string_literal: true
+ 
+ class StatusLengthValidator < ActiveModel::Validator
+-  MAX_CHARS = 500
++  MAX_CHARS = 2025
+   URL_PLACEHOLDER_CHARS = 23
+   URL_PLACEHOLDER = 'x' * 23
+ 
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Sat, 26 Jul 2025 12:47:28 +0000
+Subject: [PATCH 3/4] Prepare for maximum character limit change for New Year
+
+
+diff --git a/app/serializers/rest/instance_serializer.rb b/app/serializers/rest/instance_serializer.rb
+index 3008df5e81..e85c78e52a 100644
+--- a/app/serializers/rest/instance_serializer.rb
++++ b/app/serializers/rest/instance_serializer.rb
+@@ -74,7 +74,7 @@ class REST::InstanceSerializer < ActiveModel::Serializer
+       },
+ 
+       statuses: {
+-        max_characters: StatusLengthValidator::MAX_CHARS,
++        max_characters: [StatusLengthValidator::MAX_CHARS, Time.now.year].min, # rubocop:disable Rails/TimeZone
+         max_media_attachments: Status::MEDIA_ATTACHMENTS_LIMIT,
+         characters_reserved_per_url: StatusLengthValidator::URL_PLACEHOLDER_CHARS,
+       },
+diff --git a/app/serializers/rest/v1/instance_serializer.rb b/app/serializers/rest/v1/instance_serializer.rb
+index a1d51f50e4..490c3d30b0 100644
+--- a/app/serializers/rest/v1/instance_serializer.rb
++++ b/app/serializers/rest/v1/instance_serializer.rb
+@@ -55,7 +55,7 @@ class REST::V1::InstanceSerializer < ActiveModel::Serializer
+       },
+ 
+       statuses: {
+-        max_characters: StatusLengthValidator::MAX_CHARS,
++        max_characters: [StatusLengthValidator::MAX_CHARS, Time.now.year].min, # rubocop:disable Rails/TimeZone
+         max_media_attachments: Status::MEDIA_ATTACHMENTS_LIMIT,
+         characters_reserved_per_url: StatusLengthValidator::URL_PLACEHOLDER_CHARS,
+       },
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Wed, 31 Dec 2025 16:57:03 +0900
+Subject: [PATCH 4/4] Increase status character limit to 2026
+
+
+diff --git a/app/validators/status_length_validator.rb b/app/validators/status_length_validator.rb
+index 0dd02702ed..c7c5d741fd 100644
+--- a/app/validators/status_length_validator.rb
++++ b/app/validators/status_length_validator.rb
+@@ -1,7 +1,7 @@
+ # frozen_string_literal: true
+ 
+ class StatusLengthValidator < ActiveModel::Validator
+-  MAX_CHARS = 2025
++  MAX_CHARS = 2026
+   URL_PLACEHOLDER_CHARS = 23
+   URL_PLACEHOLDER = 'x' * 23
+ 

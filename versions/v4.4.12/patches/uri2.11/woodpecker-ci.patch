@@ -1,0 +1,128 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Sun, 18 Jan 2026 19:51:47 +0900
+Subject: [PATCH] Add Woodpecker CI workflow
+
+
+diff --git a/.dockerignore b/.dockerignore
+index 9d990ab9ce..4781fb7bd8 100644
+--- a/.dockerignore
++++ b/.dockerignore
+@@ -5,6 +5,7 @@
+ .gitattributes
+ .gitignore
+ .github
++.woodpecker
+ public/system
+ public/assets
+ public/packs
+diff --git a/.woodpecker/ci.yml b/.woodpecker/ci.yml
+new file mode 100644
+index 0000000000..ad4c69ca3a
+--- /dev/null
++++ b/.woodpecker/ci.yml
+@@ -0,0 +1,104 @@
++variables:
++  - &registry 'ghcr.io'
++  - &organization 'uri-life'
++  - &repository-base 'mastodon'
++
++matrix:
++  platform:
++    - linux/amd64
++    - linux/arm64
++
++labels:
++  platform: ${platform}
++
++when:
++  - event: push
++    evaluate: 'CI_COMMIT_BRANCH matches "v[0-9]+\\\\.[0-9]+\\\\.[0-9]+([^/]+)?/uri[0-9]+\\\\.[0-9]+"'
++  - event: tag
++    evaluate: 'CI_COMMIT_TAG matches "v[0-9]+\\\\.[0-9]+\\\\.[0-9]+([^+]+)?\\\\+uri[0-9]+\\\\.[0-9]+"'
++
++steps:
++  - name: env-live
++    image: alpine:latest
++    environment:
++      MASTODON_VERSION_METADATA: '${CI_COMMIT_TAG##*+}'
++      SOURCE_TAG: '${CI_COMMIT_TAG}'
++      IMAGE_TAG: '${CI_COMMIT_TAG/+/-}-${platform##*/}'
++    commands:
++      - echo "MASTODON_VERSION_METADATA=$${MASTODON_VERSION_METADATA}" >> ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env
++      - echo "SOURCE_TAG=$${SOURCE_TAG}" >> ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env
++      - echo "IMAGE_TAG=$${IMAGE_TAG}" >> ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env
++      - \[ "${platform}" = "linux/amd64" ] && echo "IMAGE_PRIMARY=primary" >> ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env || echo "IMAGE_PRIMARY=" >> ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env
++      - \[ "${platform}" = "linux/amd64" ] && echo "IMAGE_PRIMARY_TAG=$${IMAGE_TAG%-*}" >> ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env || echo "IMAGE_PRIMARY_TAG=" >> ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env
++      - echo "IMAGE_LATEST_PLATFORM=latest-${platform##*/}" >> ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env
++      - \[ "${platform}" = "linux/amd64" ] && echo "IMAGE_LATEST=latest" >> ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env || echo "IMAGE_LATEST=" >> ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env
++      - cat ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env
++    when:
++      - evaluate: 'CI_COMMIT_TAG matches "v[0-9]+\\\\.[0-9]+\\\\.[0-9]+([^+]+)?\\\\+uri[0-9]+\\\\.[0-9]+"'
++  - name: env-staging
++    image: alpine:latest
++    environment:
++      MASTODON_VERSION_METADATA: '${CI_COMMIT_BRANCH##*/}-${CI_COMMIT_SHA:0:7}'
++      SOURCE_TAG: '${CI_COMMIT_BRANCH}'
++      IMAGE_TAG: '${CI_COMMIT_BRANCH/\//-}-staging-${platform##*/}'
++    commands:
++      - echo "MASTODON_VERSION_METADATA=$${MASTODON_VERSION_METADATA}" >> ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env
++      - echo "SOURCE_TAG=$${SOURCE_TAG}" >> ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env
++      - echo "IMAGE_TAG=$${IMAGE_TAG}" >> ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env
++      - \[ "${platform}" = "linux/amd64" ] && echo "IMAGE_PRIMARY=primary" >> ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env || echo "IMAGE_PRIMARY=" >> ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env
++      - \[ "${platform}" = "linux/amd64" ] && echo "IMAGE_PRIMARY_TAG=$${IMAGE_TAG%-*}" >> ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env || echo "IMAGE_PRIMARY_TAG=" >> ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env
++      - echo "IMAGE_LATEST_PLATFORM=latest-staging-${platform##*/}" >> ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env
++      - \[ "${platform}" = "linux/amd64" ] && echo "IMAGE_LATEST=latest-staging" >> ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env || echo "IMAGE_LATEST=" >> ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env
++      - cat ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env
++    when:
++      - evaluate: 'CI_COMMIT_BRANCH matches "v[0-9]+\\\\.[0-9]+\\\\.[0-9]+([^/]+)?/uri[0-9]+\\\\.[0-9]+"'
++  - name: build
++    image: docker:cli
++    environment:
++      GITHUB_REPOSITORY: '${CI_REPO}'
++    commands:
++      - source ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env
++      - docker build -t mastodon-$${CI_PIPELINE_PARENT}-$${CI_PIPELINE_NUMBER}:latest --build-arg MASTODON_VERSION_METADATA=$${MASTODON_VERSION_METADATA} --build-arg GITHUB_REPOSITORY=$${GITHUB_REPOSITORY} --build-arg SOURCE_TAG=$${SOURCE_TAG} .
++      - docker build -t mastodon-streaming-$${CI_PIPELINE_PARENT}-$${CI_PIPELINE_NUMBER}:latest --build-arg MASTODON_VERSION_METADATA=$${MASTODON_VERSION_METADATA} --build-arg GITHUB_REPOSITORY=$${GITHUB_REPOSITORY} --build-arg SOURCE_TAG=$${SOURCE_TAG} -f streaming/Dockerfile .
++    volumes:
++      - /var/run/docker.sock:/var/run/docker.sock
++  - name: push
++    image: docker:cli
++    environment:
++      IMAGE_REGISTRY: *registry
++      IMAGE_ORGANIZATION: *organization
++      IMAGE_REPOSITORY_BASE: *repository-base
++      GITHUB_USERNAME:
++        from_secret: GITHUB_USERNAME
++      GITHUB_TOKEN:
++        from_secret: GITHUB_TOKEN
++    commands:
++      - source ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env
++      - echo "$${GITHUB_TOKEN}" | docker login $${IMAGE_REGISTRY} -u $${GITHUB_USERNAME} --password-stdin
++      - docker image tag mastodon-$${CI_PIPELINE_PARENT}-$${CI_PIPELINE_NUMBER}:latest $${IMAGE_REGISTRY}/$${IMAGE_ORGANIZATION}/$${IMAGE_REPOSITORY_BASE}:$${IMAGE_TAG}
++      - docker image tag mastodon-streaming-$${CI_PIPELINE_PARENT}-$${CI_PIPELINE_NUMBER}:latest $${IMAGE_REGISTRY}/$${IMAGE_ORGANIZATION}/$${IMAGE_REPOSITORY_BASE}-streaming:$${IMAGE_TAG}
++      - \[ -n "$${IMAGE_PRIMARY}" ] && docker image tag mastodon-$${CI_PIPELINE_PARENT}-$${CI_PIPELINE_NUMBER}:latest $${IMAGE_REGISTRY}/$${IMAGE_ORGANIZATION}/$${IMAGE_REPOSITORY_BASE}:$${IMAGE_PRIMARY_TAG}
++      - \[ -n "$${IMAGE_PRIMARY}" ] && docker image tag mastodon-streaming-$${CI_PIPELINE_PARENT}-$${CI_PIPELINE_NUMBER}:latest $${IMAGE_REGISTRY}/$${IMAGE_ORGANIZATION}/$${IMAGE_REPOSITORY_BASE}-streaming:$${IMAGE_PRIMARY_TAG}
++      - \[ -n "$${IMAGE_LATEST_PLATFORM}" ] && docker image tag mastodon-$${CI_PIPELINE_PARENT}-$${CI_PIPELINE_NUMBER}:latest $${IMAGE_REGISTRY}/$${IMAGE_ORGANIZATION}/$${IMAGE_REPOSITORY_BASE}:$${IMAGE_LATEST_PLATFORM}
++      - \[ -n "$${IMAGE_LATEST_PLATFORM}" ] && docker image tag mastodon-streaming-$${CI_PIPELINE_PARENT}-$${CI_PIPELINE_NUMBER}:latest $${IMAGE_REGISTRY}/$${IMAGE_ORGANIZATION}/$${IMAGE_REPOSITORY_BASE}-streaming:$${IMAGE_LATEST_PLATFORM}
++      - \[ -n "$${IMAGE_LATEST}" ] && docker image tag mastodon-$${CI_PIPELINE_PARENT}-$${CI_PIPELINE_NUMBER}:latest $${IMAGE_REGISTRY}/$${IMAGE_ORGANIZATION}/$${IMAGE_REPOSITORY_BASE}:$${IMAGE_LATEST}
++      - \[ -n "$${IMAGE_LATEST}" ] && docker image tag mastodon-streaming-$${CI_PIPELINE_PARENT}-$${CI_PIPELINE_NUMBER}:latest $${IMAGE_REGISTRY}/$${IMAGE_ORGANIZATION}/$${IMAGE_REPOSITORY_BASE}-streaming:$${IMAGE_LATEST}
++      - docker image push $${IMAGE_REGISTRY}/$${IMAGE_ORGANIZATION}/$${IMAGE_REPOSITORY_BASE}:$${IMAGE_TAG}
++      - docker image push $${IMAGE_REGISTRY}/$${IMAGE_ORGANIZATION}/$${IMAGE_REPOSITORY_BASE}-streaming:$${IMAGE_TAG}
++      - \[ -n "$${IMAGE_PRIMARY}" ] && docker image push $${IMAGE_REGISTRY}/$${IMAGE_ORGANIZATION}/$${IMAGE_REPOSITORY_BASE}:$${IMAGE_PRIMARY_TAG}
++      - \[ -n "$${IMAGE_PRIMARY}" ] && docker image push $${IMAGE_REGISTRY}/$${IMAGE_ORGANIZATION}/$${IMAGE_REPOSITORY_BASE}-streaming:$${IMAGE_PRIMARY_TAG}
++      - \[ -n "$${IMAGE_LATEST_PLATFORM}" ] && docker image push $${IMAGE_REGISTRY}/$${IMAGE_ORGANIZATION}/$${IMAGE_REPOSITORY_BASE}:$${IMAGE_LATEST_PLATFORM}
++      - \[ -n "$${IMAGE_LATEST_PLATFORM}" ] && docker image push $${IMAGE_REGISTRY}/$${IMAGE_ORGANIZATION}/$${IMAGE_REPOSITORY_BASE}-streaming:$${IMAGE_LATEST_PLATFORM}
++      - \[ -n "$${IMAGE_LATEST}" ] && docker image push $${IMAGE_REGISTRY}/$${IMAGE_ORGANIZATION}/$${IMAGE_REPOSITORY_BASE}:$${IMAGE_LATEST}
++      - \[ -n "$${IMAGE_LATEST}" ] && docker image push $${IMAGE_REGISTRY}/$${IMAGE_ORGANIZATION}/$${IMAGE_REPOSITORY_BASE}-streaming:$${IMAGE_LATEST}
++      - docker logout $${IMAGE_REGISTRY}
++    volumes:
++      - /var/run/docker.sock:/var/run/docker.sock
++  - name: cleanup
++    image: docker:cli
++    commands:
++      - source ../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env
++      - docker image rm mastodon-$${CI_PIPELINE_PARENT}-$${CI_PIPELINE_NUMBER}:latest
++      - docker image rm mastodon-streaming-$${CI_PIPELINE_PARENT}-$${CI_PIPELINE_NUMBER}:latest
++    volumes:
++      - /var/run/docker.sock:/var/run/docker.sock

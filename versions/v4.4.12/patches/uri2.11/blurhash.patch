@@ -1,0 +1,21 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Fri, 11 Oct 2024 16:10:30 +0900
+Subject: [PATCH] Change BlurHash components to 6x6
+
+
+diff --git a/app/models/media_attachment.rb b/app/models/media_attachment.rb
+index 2e60f732b8..a411618be5 100644
+--- a/app/models/media_attachment.rb
++++ b/app/models/media_attachment.rb
+@@ -64,8 +64,8 @@ class MediaAttachment < ApplicationRecord
+   AUDIO_MIME_TYPES             = %w(audio/wave audio/wav audio/x-wav audio/x-pn-wave audio/vnd.wave audio/ogg audio/vorbis audio/mpeg audio/mp3 audio/webm audio/flac audio/aac audio/m4a audio/x-m4a audio/mp4 audio/3gpp video/x-ms-asf).freeze
+ 
+   BLURHASH_OPTIONS = {
+-    x_comp: 4,
+-    y_comp: 4,
++    x_comp: 6,
++    y_comp: 6,
+   }.freeze
+ 
+   IMAGE_STYLES = {
