@@ -16,6 +16,8 @@ when:
       include:
         - 'versions/**'
         - 'manifest.yaml'
+  - event: tag
+    evaluate: 'CI_COMMIT_TAG matches "v[0-9]+\\.[0-9]+\\.[0-9]+([^+]+)?\\+uri[0-9]+\\.[0-9]+"'
   - event: manual
     branch: main
 
@@ -26,6 +28,16 @@ steps:
     commands:
       - apk add --no-cache git bash
       - scripts/detect-versions.sh "../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
+      - |
+        ENV_FILE="../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
+        # 이벤트 타입에 따른 태그 접미사 설정
+        if [ "${CI_PIPELINE_EVENT}" = "tag" ]; then
+          echo "IS_RELEASE=true" >> "$ENV_FILE"
+          echo "TAG_SUFFIX=" >> "$ENV_FILE"
+        else
+          echo "IS_RELEASE=false" >> "$ENV_FILE"
+          echo "TAG_SUFFIX=-staging" >> "$ENV_FILE"
+        fi
 
   # 멀티 아키텍처 manifest 생성
   - name: create-manifest
@@ -58,8 +70,8 @@ steps:
           MASTODON_VER=$(echo "$VERSION_COMBO" | cut -d: -f1)
           URI_VER=$(echo "$VERSION_COMBO" | cut -d: -f2)
 
-          # 태그 정의
-          MULTI_TAG="${MASTODON_VER}-${URI_VER}"
+          # 태그 정의 (staging일 경우 접미사 포함)
+          MULTI_TAG="${MASTODON_VER}-${URI_VER}${TAG_SUFFIX}"
           AMD64_TAG="${MULTI_TAG}-amd64"
           ARM64_TAG="${MULTI_TAG}-arm64"
 
@@ -93,33 +105,34 @@ steps:
 
           # 최신 버전인 경우 latest manifest 생성
           if [ "$VERSION_COMBO" = "$LATEST_VERSION" ]; then
-            echo "=== 최신 버전입니다. latest manifest 생성 ==="
+            LATEST_TAG="latest${TAG_SUFFIX}"
+            echo "=== 최신 버전입니다. ${LATEST_TAG} manifest 생성 ==="
 
             # Mastodon latest manifest
-            docker manifest create --amend "${REGISTRY_IMAGE}:latest" \
-              "${REGISTRY_IMAGE}:latest-amd64" \
-              "${REGISTRY_IMAGE}:latest-arm64"
+            docker manifest create --amend "${REGISTRY_IMAGE}:${LATEST_TAG}" \
+              "${REGISTRY_IMAGE}:${LATEST_TAG}-amd64" \
+              "${REGISTRY_IMAGE}:${LATEST_TAG}-arm64"
 
-            docker manifest annotate "${REGISTRY_IMAGE}:latest" \
-              "${REGISTRY_IMAGE}:latest-amd64" --os linux --arch amd64
+            docker manifest annotate "${REGISTRY_IMAGE}:${LATEST_TAG}" \
+              "${REGISTRY_IMAGE}:${LATEST_TAG}-amd64" --os linux --arch amd64
 
-            docker manifest annotate "${REGISTRY_IMAGE}:latest" \
-              "${REGISTRY_IMAGE}:latest-arm64" --os linux --arch arm64
+            docker manifest annotate "${REGISTRY_IMAGE}:${LATEST_TAG}" \
+              "${REGISTRY_IMAGE}:${LATEST_TAG}-arm64" --os linux --arch arm64
 
-            docker manifest push "${REGISTRY_IMAGE}:latest"
+            docker manifest push "${REGISTRY_IMAGE}:${LATEST_TAG}"
 
             # Streaming latest manifest
-            docker manifest create --amend "${REGISTRY_STREAMING}:latest" \
-              "${REGISTRY_STREAMING}:latest-amd64" \
-              "${REGISTRY_STREAMING}:latest-arm64"
+            docker manifest create --amend "${REGISTRY_STREAMING}:${LATEST_TAG}" \
+              "${REGISTRY_STREAMING}:${LATEST_TAG}-amd64" \
+              "${REGISTRY_STREAMING}:${LATEST_TAG}-arm64"
 
-            docker manifest annotate "${REGISTRY_STREAMING}:latest" \
-              "${REGISTRY_STREAMING}:latest-amd64" --os linux --arch amd64
+            docker manifest annotate "${REGISTRY_STREAMING}:${LATEST_TAG}" \
+              "${REGISTRY_STREAMING}:${LATEST_TAG}-amd64" --os linux --arch amd64
 
-            docker manifest annotate "${REGISTRY_STREAMING}:latest" \
-              "${REGISTRY_STREAMING}:latest-arm64" --os linux --arch arm64
+            docker manifest annotate "${REGISTRY_STREAMING}:${LATEST_TAG}" \
+              "${REGISTRY_STREAMING}:${LATEST_TAG}-arm64" --os linux --arch arm64
 
-            docker manifest push "${REGISTRY_STREAMING}:latest"
+            docker manifest push "${REGISTRY_STREAMING}:${LATEST_TAG}"
           fi
         done
 
