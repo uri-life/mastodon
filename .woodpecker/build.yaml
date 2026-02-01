@@ -22,6 +22,8 @@ when:
       include:
         - 'versions/**'
         - 'manifest.yaml'
+  - event: manual
+    branch: main
 
 steps:
   # 변경된 버전 감지 및 최신 버전 판단

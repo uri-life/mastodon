@@ -16,6 +16,8 @@ when:
       include:
         - 'versions/**'
         - 'manifest.yaml'
+  - event: manual
+    branch: main
 
 steps:
   # 버전 정보 추출
