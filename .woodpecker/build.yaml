@@ -64,8 +64,14 @@ steps:
           linux/arm64) YQ_ARCH="arm64" ;;
           *) echo "지원하지 않는 플랫폼: ${platform}"; exit 1 ;;
         esac
-        wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_$YQ_ARCH"
+        echo "=== yq 다운로드: yq_linux_$YQ_ARCH ==="
+        wget -O /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_$YQ_ARCH"
         chmod +x /usr/local/bin/yq
+        # yq 설치 확인
+        if ! /usr/local/bin/yq --version; then
+          echo "ERROR: yq 설치 실패"
+          exit 1
+        fi
       - |
         ENV_FILE="../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
         . "$ENV_FILE"
@@ -89,7 +95,15 @@ steps:
         git clone --depth=1 "$UPSTREAM_URL" mastodon
         cd mastodon
         git fetch --tags
+        echo "=== 사용 가능한 태그 (최근 10개) ==="
+        git tag | sort -V | tail -10
         cd ..
+
+        # 디버깅: 현재 디렉토리와 manifest 확인
+        echo "=== 디버깅 정보 ==="
+        echo "PWD: $(pwd)"
+        echo "manifest.yaml 존재: $(test -f manifest.yaml && echo 'YES' || echo 'NO')"
+        echo "versions 디렉토리: $(ls -la versions/ 2>/dev/null | head -5)"
 
         # 각 버전별로 패치 적용 (브랜치 생성됨: uri/vX.Y.Z/uriX.Y)
         for VERSION_COMBO in $VERSIONS_TO_BUILD; do
@@ -97,6 +111,8 @@ steps:
           URI_VER=`echo "$VERSION_COMBO" | cut -d: -f2`
 
           echo "=== 패치 적용: $MASTODON_VER + $URI_VER ==="
+          echo "manifest 경로: versions/$MASTODON_VER/patches/$URI_VER/manifest.yaml"
+          ls -la "versions/$MASTODON_VER/patches/$URI_VER/" 2>/dev/null | head -5 || echo "디렉토리 없음"
           uri/bin/uri apply "$MASTODON_VER" "$URI_VER" mastodon
         done
 
