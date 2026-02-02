@@ -63,6 +63,9 @@ steps:
         # 레지스트리 로그인
         echo "$GITHUB_TOKEN" | docker login "$IMAGE_REGISTRY" -u "$GITHUB_USERNAME" --password-stdin
 
+        # buildx 빌더 생성 (imagetools 사용을 위해)
+        docker buildx create --use --name multiarch-builder 2>/dev/null || docker buildx use multiarch-builder
+
         REGISTRY_IMAGE="$IMAGE_REGISTRY/$IMAGE_ORGANIZATION/$IMAGE_REPOSITORY_BASE"
         REGISTRY_STREAMING="$IMAGE_REGISTRY/$IMAGE_ORGANIZATION/$IMAGE_REPOSITORY_BASE-streaming"
 
@@ -77,73 +80,32 @@ steps:
 
           echo "=== Manifest 생성: $MULTI_TAG ==="
 
-          # 기존 로컬 manifest 캐시 삭제 (있을 경우)
-          docker manifest rm "$REGISTRY_IMAGE:$MULTI_TAG" 2>/dev/null || true
-          docker manifest rm "$REGISTRY_STREAMING:$MULTI_TAG" 2>/dev/null || true
-
-          # Mastodon 메인 이미지 manifest 생성
-          docker manifest create "$REGISTRY_IMAGE:$MULTI_TAG" \
+          # buildx imagetools를 사용하여 멀티 아키텍처 manifest 생성
+          # (manifest list를 소스로 사용해도 동작함)
+          docker buildx imagetools create -t "$REGISTRY_IMAGE:$MULTI_TAG" \
             "$REGISTRY_IMAGE:$AMD64_TAG" \
             "$REGISTRY_IMAGE:$ARM64_TAG"
 
-          docker manifest annotate "$REGISTRY_IMAGE:$MULTI_TAG" \
-            "$REGISTRY_IMAGE:$AMD64_TAG" --os linux --arch amd64
-
-          docker manifest annotate "$REGISTRY_IMAGE:$MULTI_TAG" \
-            "$REGISTRY_IMAGE:$ARM64_TAG" --os linux --arch arm64
-
-          docker manifest push "$REGISTRY_IMAGE:$MULTI_TAG"
-
-          # Streaming 이미지 manifest 생성
-          docker manifest create "$REGISTRY_STREAMING:$MULTI_TAG" \
+          docker buildx imagetools create -t "$REGISTRY_STREAMING:$MULTI_TAG" \
             "$REGISTRY_STREAMING:$AMD64_TAG" \
             "$REGISTRY_STREAMING:$ARM64_TAG"
-
-          docker manifest annotate "$REGISTRY_STREAMING:$MULTI_TAG" \
-            "$REGISTRY_STREAMING:$AMD64_TAG" --os linux --arch amd64
-
-          docker manifest annotate "$REGISTRY_STREAMING:$MULTI_TAG" \
-            "$REGISTRY_STREAMING:$ARM64_TAG" --os linux --arch arm64
-
-          docker manifest push "$REGISTRY_STREAMING:$MULTI_TAG"
 
           # 최신 버전인 경우 latest manifest 생성
           if [ "$VERSION_COMBO" = "$LATEST_VERSION" ]; then
             LATEST_TAG="latest$TAG_SUFFIX"
             echo "=== 최신 버전입니다. $LATEST_TAG manifest 생성 ==="
 
-            # 기존 로컬 manifest 캐시 삭제 (있을 경우)
-            docker manifest rm "$REGISTRY_IMAGE:$LATEST_TAG" 2>/dev/null || true
-            docker manifest rm "$REGISTRY_STREAMING:$LATEST_TAG" 2>/dev/null || true
-
-            # Mastodon latest manifest
-            docker manifest create "$REGISTRY_IMAGE:$LATEST_TAG" \
+            docker buildx imagetools create -t "$REGISTRY_IMAGE:$LATEST_TAG" \
               "$REGISTRY_IMAGE:$LATEST_TAG-amd64" \
               "$REGISTRY_IMAGE:$LATEST_TAG-arm64"
 
-            docker manifest annotate "$REGISTRY_IMAGE:$LATEST_TAG" \
-              "$REGISTRY_IMAGE:$LATEST_TAG-amd64" --os linux --arch amd64
-
-            docker manifest annotate "$REGISTRY_IMAGE:$LATEST_TAG" \
-              "$REGISTRY_IMAGE:$LATEST_TAG-arm64" --os linux --arch arm64
-
-            docker manifest push "$REGISTRY_IMAGE:$LATEST_TAG"
-
-            # Streaming latest manifest
-            docker manifest create "$REGISTRY_STREAMING:$LATEST_TAG" \
+            docker buildx imagetools create -t "$REGISTRY_STREAMING:$LATEST_TAG" \
               "$REGISTRY_STREAMING:$LATEST_TAG-amd64" \
               "$REGISTRY_STREAMING:$LATEST_TAG-arm64"
-
-            docker manifest annotate "$REGISTRY_STREAMING:$LATEST_TAG" \
-              "$REGISTRY_STREAMING:$LATEST_TAG-amd64" --os linux --arch amd64
-
-            docker manifest annotate "$REGISTRY_STREAMING:$LATEST_TAG" \
-              "$REGISTRY_STREAMING:$LATEST_TAG-arm64" --os linux --arch arm64
-
-            docker manifest push "$REGISTRY_STREAMING:$LATEST_TAG"
           fi
         done
 
+        docker buildx rm multiarch-builder 2>/dev/null || true
         docker logout "$IMAGE_REGISTRY"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
