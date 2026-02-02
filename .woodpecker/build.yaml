@@ -65,13 +65,13 @@ steps:
 
         # uri 도구 클론
         echo "=== URI 도구 설치 ==="
-        git clone --depth=1 https://github.com/uri-life/uri.git ../uri
-        chmod +x ../uri/bin/uri
+        git clone --depth=1 https://github.com/uri-life/uri.git uri
+        chmod +x uri/bin/uri
 
         # upstream 클론 (태그 정보 포함)
         echo "=== Upstream 클론 ==="
-        git clone "$UPSTREAM_URL" ../mastodon
-        cd ../mastodon
+        git clone "$UPSTREAM_URL" mastodon
+        cd mastodon
         git fetch --tags
 
         # 각 버전별로 패치 적용 (브랜치 생성됨: uri/vX.Y.Z/uriX.Y)
@@ -80,7 +80,7 @@ steps:
           URI_VER=$(echo "$VERSION_COMBO" | cut -d: -f2)
 
           echo "=== 패치 적용: $MASTODON_VER + $URI_VER ==="
-          ../uri/bin/uri apply "$MASTODON_VER" "$URI_VER" .
+          uri/bin/uri apply "$MASTODON_VER" "$URI_VER" .
         done
 
   # Docker 이미지 빌드
@@ -100,7 +100,7 @@ steps:
           MASTODON_VER=$(echo "$VERSION_COMBO" | cut -d: -f1)
           URI_VER=$(echo "$VERSION_COMBO" | cut -d: -f2)
 
-          WORK_DIR="../mastodon"
+          WORK_DIR="mastodon"
           BRANCH_NAME="uri/${MASTODON_VER}/${URI_VER}"
           IMAGE_NAME="mastodon-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}-${MASTODON_VER}-${URI_VER}"
           STREAMING_IMAGE_NAME="mastodon-streaming-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}-${MASTODON_VER}-${URI_VER}"
