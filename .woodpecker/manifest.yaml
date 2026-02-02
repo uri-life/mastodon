@@ -77,8 +77,12 @@ steps:
 
           echo "=== Manifest 생성: $MULTI_TAG ==="
 
+          # 기존 로컬 manifest 캐시 삭제 (있을 경우)
+          docker manifest rm "$REGISTRY_IMAGE:$MULTI_TAG" 2>/dev/null || true
+          docker manifest rm "$REGISTRY_STREAMING:$MULTI_TAG" 2>/dev/null || true
+
           # Mastodon 메인 이미지 manifest 생성
-          docker manifest create --amend "$REGISTRY_IMAGE:$MULTI_TAG" \
+          docker manifest create "$REGISTRY_IMAGE:$MULTI_TAG" \
             "$REGISTRY_IMAGE:$AMD64_TAG" \
             "$REGISTRY_IMAGE:$ARM64_TAG"
 
@@ -91,7 +95,7 @@ steps:
           docker manifest push "$REGISTRY_IMAGE:$MULTI_TAG"
 
           # Streaming 이미지 manifest 생성
-          docker manifest create --amend "$REGISTRY_STREAMING:$MULTI_TAG" \
+          docker manifest create "$REGISTRY_STREAMING:$MULTI_TAG" \
             "$REGISTRY_STREAMING:$AMD64_TAG" \
             "$REGISTRY_STREAMING:$ARM64_TAG"
 
@@ -108,8 +112,12 @@ steps:
             LATEST_TAG="latest$TAG_SUFFIX"
             echo "=== 최신 버전입니다. $LATEST_TAG manifest 생성 ==="
 
+            # 기존 로컬 manifest 캐시 삭제 (있을 경우)
+            docker manifest rm "$REGISTRY_IMAGE:$LATEST_TAG" 2>/dev/null || true
+            docker manifest rm "$REGISTRY_STREAMING:$LATEST_TAG" 2>/dev/null || true
+
             # Mastodon latest manifest
-            docker manifest create --amend "$REGISTRY_IMAGE:$LATEST_TAG" \
+            docker manifest create "$REGISTRY_IMAGE:$LATEST_TAG" \
               "$REGISTRY_IMAGE:$LATEST_TAG-amd64" \
               "$REGISTRY_IMAGE:$LATEST_TAG-arm64"
 
@@ -122,7 +130,7 @@ steps:
             docker manifest push "$REGISTRY_IMAGE:$LATEST_TAG"
 
             # Streaming latest manifest
-            docker manifest create --amend "$REGISTRY_STREAMING:$LATEST_TAG" \
+            docker manifest create "$REGISTRY_STREAMING:$LATEST_TAG" \
               "$REGISTRY_STREAMING:$LATEST_TAG-amd64" \
               "$REGISTRY_STREAMING:$LATEST_TAG-arm64"
 
