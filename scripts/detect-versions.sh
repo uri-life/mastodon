@@ -15,10 +15,24 @@ touch "$ENV_FILE"
 
 # 변경된 파일에서 버전 추출 (현재 커밋의 변경사항)
 echo "=== 변경된 파일 감지 ==="
+
+# 디버깅 정보
+echo "디버그: HEAD=$(git rev-parse HEAD 2>/dev/null || echo '없음')"
+echo "디버그: git log"
+git log --oneline -3 2>/dev/null || echo "(git log 실패)"
+
+# git show로 현재 커밋의 변경 파일 감지 (depth >= 2 필요)
+echo "방법: git show HEAD"
 CHANGED_FILES=$(git show --name-only --format="" HEAD 2>/dev/null || true)
 
+# 대체: git diff HEAD~1 (git show가 실패할 경우)
 if [ -z "$CHANGED_FILES" ]; then
-  echo "경고: 현재 커밋에서 변경된 파일 없음"
+  echo "방법: git diff HEAD~1"
+  CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || true)
+fi
+
+if [ -z "$CHANGED_FILES" ]; then
+  echo "경고: 변경된 파일을 감지할 수 없음"
 fi
 
 echo "디버그: 감지된 파일 수=$(echo "$CHANGED_FILES" | grep -c . || echo 0)"
