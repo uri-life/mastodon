@@ -56,7 +56,7 @@ steps:
   - name: setup
     image: alpine:latest
     commands:
-      - apk add --no-cache git yq
+      - apk add --no-cache coreutils git yq
       - |
         ENV_FILE="../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
         source "$ENV_FILE"
