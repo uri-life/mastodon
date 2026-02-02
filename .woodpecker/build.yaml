@@ -59,7 +59,7 @@ steps:
       - apt update && apt install -y coreutils git yq
       - |
         ENV_FILE="../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
-        source "$ENV_FILE"
+        . "$ENV_FILE"
 
         if [ -z "$VERSIONS_TO_BUILD" ]; then
           echo "빌드할 버전이 없습니다. 스킵합니다."
