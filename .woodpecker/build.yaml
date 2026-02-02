@@ -83,8 +83,8 @@ steps:
 
         # 각 버전별로 패치 적용 (브랜치 생성됨: uri/vX.Y.Z/uriX.Y)
         for VERSION_COMBO in $VERSIONS_TO_BUILD; do
-          MASTODON_VER=$(echo "$VERSION_COMBO" | cut -d: -f1)
-          URI_VER=$(echo "$VERSION_COMBO" | cut -d: -f2)
+          MASTODON_VER=`echo "$VERSION_COMBO" | cut -d: -f1`
+          URI_VER=`echo "$VERSION_COMBO" | cut -d: -f2`
 
           echo "=== 패치 적용: $MASTODON_VER + $URI_VER ==="
           ../uri/bin/uri apply "$MASTODON_VER" "$URI_VER" .
@@ -104,8 +104,8 @@ steps:
         fi
 
         for VERSION_COMBO in $VERSIONS_TO_BUILD; do
-          MASTODON_VER=$(echo "$VERSION_COMBO" | cut -d: -f1)
-          URI_VER=$(echo "$VERSION_COMBO" | cut -d: -f2)
+          MASTODON_VER=`echo "$VERSION_COMBO" | cut -d: -f1`
+          URI_VER=`echo "$VERSION_COMBO" | cut -d: -f2`
 
           WORK_DIR="mastodon"
           BRANCH_NAME="uri/${MASTODON_VER}/${URI_VER}"
@@ -169,8 +169,8 @@ steps:
         REGISTRY_STREAMING="${IMAGE_REGISTRY}/${IMAGE_ORGANIZATION}/${IMAGE_REPOSITORY_BASE}-streaming"
 
         for VERSION_COMBO in $VERSIONS_TO_BUILD; do
-          MASTODON_VER=$(echo "$VERSION_COMBO" | cut -d: -f1)
-          URI_VER=$(echo "$VERSION_COMBO" | cut -d: -f2)
+          MASTODON_VER=`echo "$VERSION_COMBO" | cut -d: -f1`
+          URI_VER=`echo "$VERSION_COMBO" | cut -d: -f2`
 
           IMAGE_NAME="mastodon-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}-${MASTODON_VER}-${URI_VER}"
           STREAMING_IMAGE_NAME="mastodon-streaming-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}-${MASTODON_VER}-${URI_VER}"
@@ -214,8 +214,8 @@ steps:
         fi
 
         for VERSION_COMBO in $VERSIONS_TO_BUILD; do
-          MASTODON_VER=$(echo "$VERSION_COMBO" | cut -d: -f1)
-          URI_VER=$(echo "$VERSION_COMBO" | cut -d: -f2)
+          MASTODON_VER=`echo "$VERSION_COMBO" | cut -d: -f1`
+          URI_VER=`echo "$VERSION_COMBO" | cut -d: -f2`
 
           IMAGE_NAME="mastodon-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}-${MASTODON_VER}-${URI_VER}"
           STREAMING_IMAGE_NAME="mastodon-streaming-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}-${MASTODON_VER}-${URI_VER}"

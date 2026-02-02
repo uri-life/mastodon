@@ -66,8 +66,8 @@ steps:
         REGISTRY_STREAMING="${IMAGE_REGISTRY}/${IMAGE_ORGANIZATION}/${IMAGE_REPOSITORY_BASE}-streaming"
 
         for VERSION_COMBO in $VERSIONS_TO_BUILD; do
-          MASTODON_VER=$(echo "$VERSION_COMBO" | cut -d: -f1)
-          URI_VER=$(echo "$VERSION_COMBO" | cut -d: -f2)
+          MASTODON_VER=`echo "$VERSION_COMBO" | cut -d: -f1`
+          URI_VER=`echo "$VERSION_COMBO" | cut -d: -f2`
 
           # 태그 정의 (staging일 경우 접미사 포함)
           MULTI_TAG="${MASTODON_VER}-${URI_VER}${TAG_SUFFIX}"
