@@ -132,6 +132,7 @@ steps:
           docker build -t "$IMAGE_NAME:latest" \
             --build-arg MASTODON_VERSION_METADATA="$VERSION_METADATA" \
             --build-arg GITHUB_REPOSITORY="${CI_REPO}" \
+            --build-arg SOURCE_BASE_URL="https://github.com/$SOURCE_TAG" \
             --build-arg SOURCE_TAG="$MASTODON_VER+$URI_VER" \
             .
 
@@ -139,6 +140,7 @@ steps:
           docker build -t "$STREAMING_IMAGE_NAME:latest" \
             --build-arg MASTODON_VERSION_METADATA="$VERSION_METADATA" \
             --build-arg GITHUB_REPOSITORY="${CI_REPO}" \
+            --build-arg SOURCE_BASE_URL="https://github.com/$SOURCE_TAG" \
             --build-arg SOURCE_TAG="$MASTODON_VER+$URI_VER" \
             -f streaming/Dockerfile \
             .
