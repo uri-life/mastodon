@@ -15,27 +15,10 @@ touch "$ENV_FILE"
 
 # 변경된 파일에서 버전 추출
 echo "=== 변경된 파일 감지 ==="
-echo "디버그: CI_PREV_COMMIT_SHA=${CI_PREV_COMMIT_SHA:-<없음>}"
-echo "디버그: CI_COMMIT_SHA=${CI_COMMIT_SHA:-<없음>}"
-echo "디버그: CI_COMMIT_BEFORE=${CI_COMMIT_BEFORE:-<없음>}"
+CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || true)
 
-# Woodpecker CI 환경 변수 우선 사용
-if [ -n "$CI_PREV_COMMIT_SHA" ] && [ -n "$CI_COMMIT_SHA" ]; then
-  echo "CI 환경 감지: $CI_PREV_COMMIT_SHA..$CI_COMMIT_SHA"
-  CHANGED_FILES=$(git diff --name-only "$CI_PREV_COMMIT_SHA" "$CI_COMMIT_SHA" 2>/dev/null || true)
-elif [ -n "$CI_COMMIT_BEFORE" ] && [ -n "$CI_COMMIT_SHA" ]; then
-  echo "CI 환경 감지 (before): $CI_COMMIT_BEFORE..$CI_COMMIT_SHA"
-  CHANGED_FILES=$(git diff --name-only "$CI_COMMIT_BEFORE" "$CI_COMMIT_SHA" 2>/dev/null || true)
-else
-  # 로컬 환경 또는 CI 변수 없을 때
-  echo "로컬 환경 모드"
-  CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git diff --name-only HEAD 2>/dev/null || true)
-fi
-
-# 만약 CHANGED_FILES가 비어있고 CI 환경이라면, 현재 커밋만 확인
-if [ -z "$CHANGED_FILES" ] && [ -n "$CI" ]; then
-  echo "경고: diff 결과 없음. 현재 커밋의 변경사항 확인 중..."
-  CHANGED_FILES=$(git show --name-only --format="" HEAD 2>/dev/null || true)
+if [ -z "$CHANGED_FILES" ]; then
+  echo "경고: 직전 커밋과의 diff 결과 없음"
 fi
 
 echo "디버그: 감지된 파일 수=$(echo "$CHANGED_FILES" | grep -c . || echo 0)"

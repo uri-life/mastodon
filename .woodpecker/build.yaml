@@ -7,6 +7,12 @@ variables:
   - &organization 'uri-life'
   - &repository-base 'mastodon'
 
+clone:
+  git:
+    image: woodpeckerci/plugin-git
+    settings:
+      depth: 2
+
 matrix:
   platform:
     - linux/amd64
