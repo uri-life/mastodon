@@ -78,8 +78,6 @@ steps:
           AMD64_TAG="$MULTI_TAG-amd64"
           ARM64_TAG="$MULTI_TAG-arm64"
 
-          echo "=== Manifest 생성: $MULTI_TAG ==="
-
           # buildx imagetools를 사용하여 멀티 아키텍처 manifest 생성
           # (manifest list를 소스로 사용해도 동작함)
           docker buildx imagetools create -t "$REGISTRY_IMAGE:$MULTI_TAG" \
@@ -93,8 +91,6 @@ steps:
           # 최신 버전인 경우 latest manifest 생성
           if [ "$VERSION_COMBO" = "$LATEST_VERSION" ]; then
             LATEST_TAG="latest$TAG_SUFFIX"
-            echo "=== 최신 버전입니다. $LATEST_TAG manifest 생성 ==="
-
             docker buildx imagetools create -t "$REGISTRY_IMAGE:$LATEST_TAG" \
               "$REGISTRY_IMAGE:$LATEST_TAG-amd64" \
               "$REGISTRY_IMAGE:$LATEST_TAG-arm64"
