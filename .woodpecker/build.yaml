@@ -12,6 +12,7 @@ clone:
     image: woodpeckerci/plugin-git
     settings:
       depth: 2
+      partial: false
 
 matrix:
   platform:

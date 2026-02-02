@@ -13,12 +13,12 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # 환경 파일 초기화
 touch "$ENV_FILE"
 
-# 변경된 파일에서 버전 추출
+# 변경된 파일에서 버전 추출 (현재 커밋의 변경사항)
 echo "=== 변경된 파일 감지 ==="
-CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || true)
+CHANGED_FILES=$(git show --name-only --format="" HEAD 2>/dev/null || true)
 
 if [ -z "$CHANGED_FILES" ]; then
-  echo "경고: 직전 커밋과의 diff 결과 없음"
+  echo "경고: 현재 커밋에서 변경된 파일 없음"
 fi
 
 echo "디버그: 감지된 파일 수=$(echo "$CHANGED_FILES" | grep -c . || echo 0)"
