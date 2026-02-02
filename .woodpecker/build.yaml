@@ -80,7 +80,7 @@ steps:
           URI_VER=$(echo "$VERSION_COMBO" | cut -d: -f2)
 
           echo "=== 패치 적용: $MASTODON_VER + $URI_VER ==="
-          uri/bin/uri apply "$MASTODON_VER" "$URI_VER" .
+          ../uri/bin/uri apply "$MASTODON_VER" "$URI_VER" .
         done
 
   # Docker 이미지 빌드
