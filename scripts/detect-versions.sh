@@ -13,6 +13,33 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # 환경 파일 초기화
 touch "$ENV_FILE"
 
+# 태그 이벤트인 경우: CI_COMMIT_TAG에서 버전 추출 (vX.Y.Z+uriX.Y 형식)
+if [ -n "$CI_COMMIT_TAG" ]; then
+  # 태그 형식 검증: vX.Y.Z+uriX.Y (중간에 추가 문자 허용)
+  if echo "$CI_COMMIT_TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+.*\+uri[0-9]+\.[0-9]+$'; then
+    # vX.Y.Z 추출 (+ 앞부분에서 v로 시작하는 버전)
+    MASTODON_VER=$(echo "$CI_COMMIT_TAG" | sed -E 's/^(v[0-9]+\.[0-9]+\.[0-9]+).*\+uri.*/\1/')
+    # uriX.Y 추출 (+ 뒷부분)
+    URI_VER=$(echo "$CI_COMMIT_TAG" | sed -E 's/.*\+(uri[0-9]+\.[0-9]+)$/\1/')
+
+    # 패치 디렉토리 존재 확인
+    PATCH_DIR="versions/${MASTODON_VER}/patches/${URI_VER}"
+    if [ -d "$PATCH_DIR" ]; then
+      VERSION_COMBO="${MASTODON_VER}:${URI_VER}"
+      echo "VERSIONS_TO_BUILD=$VERSION_COMBO" >> "$ENV_FILE"
+      echo "LATEST_VERSION=$VERSION_COMBO" >> "$ENV_FILE"
+      echo "태그에서 버전 감지: $VERSION_COMBO"
+      exit 0
+    else
+      echo "ERROR: 태그에 해당하는 패치 디렉토리가 없습니다: $PATCH_DIR"
+      exit 1
+    fi
+  else
+    echo "ERROR: 태그 형식이 올바르지 않습니다: $CI_COMMIT_TAG (예상: vX.Y.Z+uriX.Y)"
+    exit 1
+  fi
+fi
+
 # 변경된 파일에서 버전 추출 (현재 커밋의 변경사항)
 # git show로 현재 커밋의 변경 파일 감지 (depth >= 2 필요)
 CHANGED_FILES=$(git show --name-only --format="" HEAD 2>/dev/null || true)
