@@ -54,9 +54,9 @@ steps:
 
   # upstream 클론 및 패치 도구 설치
   - name: setup
-    image: alpine:latest
+    image: ubuntu:latest
     commands:
-      - apk add --no-cache coreutils git yq
+      - apt update && apt install -y coreutils git yq
       - |
         ENV_FILE="../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
         source "$ENV_FILE"
