@@ -10,8 +10,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # 버전 유틸리티 로드
 . "$SCRIPT_DIR/version-utils.sh"
 
-# 환경 파일 초기화
-touch "$ENV_FILE"
+# 환경 파일 초기화 (기존 내용 삭제)
+: > "$ENV_FILE"
 
 # 태그 이벤트인 경우: CI_COMMIT_TAG에서 버전 추출 (vX.Y.Z+uriX.Y 형식)
 if [ -n "$CI_COMMIT_TAG" ]; then
