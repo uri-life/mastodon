@@ -122,7 +122,7 @@ index 0dce0b9b3e..9239cb2df3 100644
    }
  
 diff --git a/app/javascript/styles/mastodon/components.scss b/app/javascript/styles/mastodon/components.scss
-index 70b0da95be..646d86fca3 100644
+index 70b0da95be..17f9cb9ec1 100644
 --- a/app/javascript/styles/mastodon/components.scss
 +++ b/app/javascript/styles/mastodon/components.scss
 @@ -86,7 +86,7 @@
@@ -348,6 +348,15 @@ index 70b0da95be..646d86fca3 100644
    .media-gallery,
    .video-player,
    .audio-player {
+@@ -1865,7 +1875,7 @@ body > [data-popper-placement] {
+   position: relative;
+   margin-block-start: 16px;
+   margin-inline-start: calc(var(--quote-margin) + var(--thread-margin, 0px));
+-  border-radius: 8px;
++  border-radius: 23px;
+   color: var(--nested-card-text);
+   background: var(--nested-card-background);
+   border: var(--nested-card-border);
 @@ -2005,7 +2015,7 @@ body > [data-popper-placement] {
    &__domain-pill {
      display: inline-flex;
@@ -357,6 +366,33 @@ index 70b0da95be..646d86fca3 100644
      border: 0;
      color: $highlight-text-color;
      font-weight: 500;
+@@ -2302,7 +2312,7 @@ a .account__avatar {
+ .explore-suggestions-card {
+   .icon-button {
+     border: 1px solid var(--background-border-color);
+-    border-radius: 4px;
++    border-radius: 18px;
+     box-sizing: content-box;
+     padding: 5px;
+ 
+@@ -2703,7 +2713,7 @@ a.account__display-name {
+   backdrop-filter: $backdrop-blur-filter;
+   border: 1px solid var(--dropdown-border-color);
+   padding: 4px;
+-  border-radius: 4px;
++  border-radius: 23px;
+   box-shadow: var(--dropdown-shadow);
+   z-index: 9999;
+ 
+@@ -2804,7 +2814,7 @@ a.account__display-name {
+     text-overflow: ellipsis;
+     white-space: nowrap;
+     text-align: inherit;
+-    border-radius: 4px;
++    border-radius: 18px;
+ 
+     &:focus,
+     &:hover,
 @@ -2994,12 +3004,12 @@ a.account__display-name {
    > .scrollable {
      border: 1px solid var(--background-border-color);
