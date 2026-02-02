@@ -57,7 +57,7 @@ steps:
     image: ubuntu:latest
     commands:
       - |
-        apt update && apt install -y coreutils git wget
+        apt update && apt install -y git wget
         # 플랫폼에 맞는 yq 바이너리 다운로드
         case "${platform}" in
           linux/amd64) YQ_ARCH="amd64" ;;
