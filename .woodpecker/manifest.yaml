@@ -52,7 +52,7 @@ steps:
     commands:
       - |
         ENV_FILE="../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
-        source "$ENV_FILE"
+        . "$ENV_FILE"
 
         if [ -z "$VERSIONS_TO_BUILD" ]; then
           echo "빌드할 버전이 없습니다. 스킵합니다."
@@ -62,76 +62,76 @@ steps:
         # 레지스트리 로그인
         echo "$GITHUB_TOKEN" | docker login "$IMAGE_REGISTRY" -u "$GITHUB_USERNAME" --password-stdin
 
-        REGISTRY_IMAGE="${IMAGE_REGISTRY}/${IMAGE_ORGANIZATION}/${IMAGE_REPOSITORY_BASE}"
-        REGISTRY_STREAMING="${IMAGE_REGISTRY}/${IMAGE_ORGANIZATION}/${IMAGE_REPOSITORY_BASE}-streaming"
+        REGISTRY_IMAGE="$IMAGE_REGISTRY/$IMAGE_ORGANIZATION/$IMAGE_REPOSITORY_BASE"
+        REGISTRY_STREAMING="$IMAGE_REGISTRY/$IMAGE_ORGANIZATION/$IMAGE_REPOSITORY_BASE-streaming"
 
         for VERSION_COMBO in $VERSIONS_TO_BUILD; do
           MASTODON_VER=`echo "$VERSION_COMBO" | cut -d: -f1`
           URI_VER=`echo "$VERSION_COMBO" | cut -d: -f2`
 
           # 태그 정의 (staging일 경우 접미사 포함)
-          MULTI_TAG="${MASTODON_VER}-${URI_VER}${TAG_SUFFIX}"
-          AMD64_TAG="${MULTI_TAG}-amd64"
-          ARM64_TAG="${MULTI_TAG}-arm64"
+          MULTI_TAG="$MASTODON_VER-$URI_VER$TAG_SUFFIX"
+          AMD64_TAG="$MULTI_TAG-amd64"
+          ARM64_TAG="$MULTI_TAG-arm64"
 
           echo "=== Manifest 생성: $MULTI_TAG ==="
 
           # Mastodon 메인 이미지 manifest 생성
-          docker manifest create --amend "${REGISTRY_IMAGE}:${MULTI_TAG}" \
-            "${REGISTRY_IMAGE}:${AMD64_TAG}" \
-            "${REGISTRY_IMAGE}:${ARM64_TAG}"
+          docker manifest create --amend "$REGISTRY_IMAGE:$MULTI_TAG" \
+            "$REGISTRY_IMAGE:$AMD64_TAG" \
+            "$REGISTRY_IMAGE:$ARM64_TAG"
 
-          docker manifest annotate "${REGISTRY_IMAGE}:${MULTI_TAG}" \
-            "${REGISTRY_IMAGE}:${AMD64_TAG}" --os linux --arch amd64
+          docker manifest annotate "$REGISTRY_IMAGE:$MULTI_TAG" \
+            "$REGISTRY_IMAGE:$AMD64_TAG" --os linux --arch amd64
 
-          docker manifest annotate "${REGISTRY_IMAGE}:${MULTI_TAG}" \
-            "${REGISTRY_IMAGE}:${ARM64_TAG}" --os linux --arch arm64
+          docker manifest annotate "$REGISTRY_IMAGE:$MULTI_TAG" \
+            "$REGISTRY_IMAGE:$ARM64_TAG" --os linux --arch arm64
 
-          docker manifest push "${REGISTRY_IMAGE}:${MULTI_TAG}"
+          docker manifest push "$REGISTRY_IMAGE:$MULTI_TAG"
 
           # Streaming 이미지 manifest 생성
-          docker manifest create --amend "${REGISTRY_STREAMING}:${MULTI_TAG}" \
-            "${REGISTRY_STREAMING}:${AMD64_TAG}" \
-            "${REGISTRY_STREAMING}:${ARM64_TAG}"
+          docker manifest create --amend "$REGISTRY_STREAMING:$MULTI_TAG" \
+            "$REGISTRY_STREAMING:$AMD64_TAG" \
+            "$REGISTRY_STREAMING:$ARM64_TAG"
 
-          docker manifest annotate "${REGISTRY_STREAMING}:${MULTI_TAG}" \
-            "${REGISTRY_STREAMING}:${AMD64_TAG}" --os linux --arch amd64
+          docker manifest annotate "$REGISTRY_STREAMING:$MULTI_TAG" \
+            "$REGISTRY_STREAMING:$AMD64_TAG" --os linux --arch amd64
 
-          docker manifest annotate "${REGISTRY_STREAMING}:${MULTI_TAG}" \
-            "${REGISTRY_STREAMING}:${ARM64_TAG}" --os linux --arch arm64
+          docker manifest annotate "$REGISTRY_STREAMING:$MULTI_TAG" \
+            "$REGISTRY_STREAMING:$ARM64_TAG" --os linux --arch arm64
 
-          docker manifest push "${REGISTRY_STREAMING}:${MULTI_TAG}"
+          docker manifest push "$REGISTRY_STREAMING:$MULTI_TAG"
 
           # 최신 버전인 경우 latest manifest 생성
           if [ "$VERSION_COMBO" = "$LATEST_VERSION" ]; then
-            LATEST_TAG="latest${TAG_SUFFIX}"
-            echo "=== 최신 버전입니다. ${LATEST_TAG} manifest 생성 ==="
+            LATEST_TAG="latest$TAG_SUFFIX"
+            echo "=== 최신 버전입니다. $LATEST_TAG manifest 생성 ==="
 
             # Mastodon latest manifest
-            docker manifest create --amend "${REGISTRY_IMAGE}:${LATEST_TAG}" \
-              "${REGISTRY_IMAGE}:${LATEST_TAG}-amd64" \
-              "${REGISTRY_IMAGE}:${LATEST_TAG}-arm64"
+            docker manifest create --amend "$REGISTRY_IMAGE:$LATEST_TAG" \
+              "$REGISTRY_IMAGE:$LATEST_TAG-amd64" \
+              "$REGISTRY_IMAGE:$LATEST_TAG-arm64"
 
-            docker manifest annotate "${REGISTRY_IMAGE}:${LATEST_TAG}" \
-              "${REGISTRY_IMAGE}:${LATEST_TAG}-amd64" --os linux --arch amd64
+            docker manifest annotate "$REGISTRY_IMAGE:$LATEST_TAG" \
+              "$REGISTRY_IMAGE:$LATEST_TAG-amd64" --os linux --arch amd64
 
-            docker manifest annotate "${REGISTRY_IMAGE}:${LATEST_TAG}" \
-              "${REGISTRY_IMAGE}:${LATEST_TAG}-arm64" --os linux --arch arm64
+            docker manifest annotate "$REGISTRY_IMAGE:$LATEST_TAG" \
+              "$REGISTRY_IMAGE:$LATEST_TAG-arm64" --os linux --arch arm64
 
-            docker manifest push "${REGISTRY_IMAGE}:${LATEST_TAG}"
+            docker manifest push "$REGISTRY_IMAGE:$LATEST_TAG"
 
             # Streaming latest manifest
-            docker manifest create --amend "${REGISTRY_STREAMING}:${LATEST_TAG}" \
-              "${REGISTRY_STREAMING}:${LATEST_TAG}-amd64" \
-              "${REGISTRY_STREAMING}:${LATEST_TAG}-arm64"
+            docker manifest create --amend "$REGISTRY_STREAMING:$LATEST_TAG" \
+              "$REGISTRY_STREAMING:$LATEST_TAG-amd64" \
+              "$REGISTRY_STREAMING:$LATEST_TAG-arm64"
 
-            docker manifest annotate "${REGISTRY_STREAMING}:${LATEST_TAG}" \
-              "${REGISTRY_STREAMING}:${LATEST_TAG}-amd64" --os linux --arch amd64
+            docker manifest annotate "$REGISTRY_STREAMING:$LATEST_TAG" \
+              "$REGISTRY_STREAMING:$LATEST_TAG-amd64" --os linux --arch amd64
 
-            docker manifest annotate "${REGISTRY_STREAMING}:${LATEST_TAG}" \
-              "${REGISTRY_STREAMING}:${LATEST_TAG}-arm64" --os linux --arch arm64
+            docker manifest annotate "$REGISTRY_STREAMING:$LATEST_TAG" \
+              "$REGISTRY_STREAMING:$LATEST_TAG-arm64" --os linux --arch arm64
 
-            docker manifest push "${REGISTRY_STREAMING}:${LATEST_TAG}"
+            docker manifest push "$REGISTRY_STREAMING:$LATEST_TAG"
           fi
         done
 
