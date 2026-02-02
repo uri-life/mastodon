@@ -32,7 +32,6 @@ steps:
   - name: detect-versions
     image: alpine:latest
     commands:
-      - apk add --no-cache git bash
       - scripts/detect-versions.sh "../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
       - |
         ENV_FILE="../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
@@ -49,7 +48,7 @@ steps:
   - name: setup
     image: alpine:latest
     commands:
-      - apk add --no-cache git bash
+      - apk add --no-cache git yq
       - |
         ENV_FILE="../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
         source "$ENV_FILE"
@@ -70,7 +69,7 @@ steps:
 
         # upstream 클론 (태그 정보 포함)
         echo "=== Upstream 클론 ==="
-        git clone "$UPSTREAM_URL" mastodon
+        git clone --depth=1 "$UPSTREAM_URL" mastodon
         cd mastodon
         git fetch --tags
 
