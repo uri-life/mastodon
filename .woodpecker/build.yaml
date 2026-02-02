@@ -56,7 +56,16 @@ steps:
   - name: setup
     image: ubuntu:latest
     commands:
-      - apt update && apt install -y coreutils git yq
+      - |
+        apt update && apt install -y coreutils git wget
+        # 플랫폼에 맞는 yq 바이너리 다운로드
+        case "${platform}" in
+          linux/amd64) YQ_ARCH="amd64" ;;
+          linux/arm64) YQ_ARCH="arm64" ;;
+          *) echo "지원하지 않는 플랫폼: ${platform}"; exit 1 ;;
+        esac
+        wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_$YQ_ARCH"
+        chmod +x /usr/local/bin/yq
       - |
         ENV_FILE="../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
         . "$ENV_FILE"
