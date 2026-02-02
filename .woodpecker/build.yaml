@@ -95,6 +95,9 @@ steps:
         git clone --depth=1 "$UPSTREAM_URL" mastodon
         cd mastodon
         git fetch --tags
+        # Git 사용자 정보 설정 (git am에 필요)
+        git config user.name "uri.life CI"
+        git config user.email "ci@uri.life"
         echo "=== 사용 가능한 태그 (최근 10개) ==="
         git tag | sort -V | tail -10
         cd ..
