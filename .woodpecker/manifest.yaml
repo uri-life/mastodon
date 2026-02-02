@@ -26,6 +26,7 @@ steps:
   - name: detect-versions
     image: alpine:latest
     commands:
+      - apk add --no-cache git
       - scripts/detect-versions.sh "../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
       - |
         ENV_FILE="../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
