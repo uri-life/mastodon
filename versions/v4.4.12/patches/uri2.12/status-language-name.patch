@@ -1,0 +1,152 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Thu, 18 Sep 2025 05:47:51 +0000
+Subject: [PATCH] Display localised language names for posts
+
+
+diff --git a/app/javascript/mastodon/components/status.jsx b/app/javascript/mastodon/components/status.jsx
+index 29fd4234dd..2c89b7013c 100644
+--- a/app/javascript/mastodon/components/status.jsx
++++ b/app/javascript/mastodon/components/status.jsx
+@@ -400,11 +400,13 @@ class Status extends ImmutablePureComponent {
+     };
+ 
+     let media, statusAvatar, prepend, rebloggedByText;
++    let statusLanguage;
+ 
+     const connectUp = previousId && previousId === status.get('in_reply_to_id');
+     const connectToRoot = rootId && rootId === status.get('in_reply_to_id');
+     const connectReply = nextInReplyToId && nextInReplyToId === status.get('id');
+     const matchedFilters = status.get('matched_filters');
++    const language = status.get('language');
+ 
+     if (status.get('reblog', null) !== null && typeof status.get('reblog') === 'object') {
+       const display_name_html = { __html: status.getIn(['account', 'display_name_html']) };
+@@ -540,6 +542,24 @@ class Status extends ImmutablePureComponent {
+       statusAvatar = <AvatarOverlay account={status.get('account')} friend={account} />;
+     }
+ 
++    if (language !== undefined && language !== null && Intl !== undefined) {
++      try {
++        statusLanguage = (
++          <div className='status__language-name' aria-hidden='true'>
++            {new Intl.DisplayNames([intl.locale], { type: 'language' }).of(language)}
++          </div>
++        );
++      } catch {
++        statusLanguage = (
++          <div className='status__language-name' aria-hidden='true'>
++            {language}
++          </div>
++        );
++      }
++    } else {
++      statusLanguage = null;
++    }
++
+     const {statusContentProps, hashtagBar} = getHashtagBarForStatus(status);
+ 
+     return (
+@@ -566,6 +586,7 @@ class Status extends ImmutablePureComponent {
+               <Link to={`/@${status.getIn(['account', 'acct'])}/${status.get('id')}`} className='status__relative-time'>
+                 <span className='status__visibility-icon'><VisibilityIcon visibility={status.get('visibility')} /></span>
+                 <RelativeTimestamp timestamp={status.get('created_at')} />{status.get('edited_at') && <abbr title={intl.formatMessage(messages.edited, { date: intl.formatDate(status.get('edited_at'), { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' }) })}> *</abbr>}
++                {statusLanguage}
+               </Link>
+ 
+               <Link to={`/@${status.getIn(['account', 'acct'])}`} title={status.getIn(['account', 'acct'])} data-hover-card-account={status.getIn(['account', 'id'])} className='status__display-name'>
+diff --git a/app/javascript/mastodon/features/status/components/detailed_status.tsx b/app/javascript/mastodon/features/status/components/detailed_status.tsx
+index ca7ea9a19b..babad31b80 100644
+--- a/app/javascript/mastodon/features/status/components/detailed_status.tsx
++++ b/app/javascript/mastodon/features/status/components/detailed_status.tsx
+@@ -6,7 +6,7 @@
+ import type { CSSProperties } from 'react';
+ import { useState, useRef, useCallback } from 'react';
+ 
+-import { FormattedMessage } from 'react-intl';
++import { FormattedMessage, useIntl } from 'react-intl';
+ 
+ import classNames from 'classnames';
+ import { Link } from 'react-router-dom';
+@@ -120,6 +120,8 @@ export const DetailedStatus: React.FC<{
+     if (onTranslate) onTranslate(status);
+   }, [onTranslate, status]);
+ 
++  const intl = useIntl();
++
+   if (!properStatus) {
+     return null;
+   }
+@@ -128,6 +130,7 @@ export const DetailedStatus: React.FC<{
+   let applicationLink;
+   let reblogLink;
+   let attachmentAspectRatio;
++  let statusLanguage;
+ 
+   if (properStatus.get('media_attachments').getIn([0, 'type']) === 'video') {
+     attachmentAspectRatio = `${properStatus.get('media_attachments').getIn([0, 'meta', 'original', 'width'])} / ${properStatus.get('media_attachments').getIn([0, 'meta', 'original', 'height'])}`;
+@@ -156,6 +159,8 @@ export const DetailedStatus: React.FC<{
+   const language =
+     status.getIn(['translation', 'language']) || status.get('language');
+ 
++  const sourceLanguage: string | null | undefined = status.get('language');
++
+   if (pictureInPicture.get('inUse')) {
+     media = <PictureInPicturePlaceholder aspectRatio={attachmentAspectRatio} />;
+   } else if (status.get('media_attachments').size > 0) {
+@@ -253,6 +258,27 @@ export const DetailedStatus: React.FC<{
+     );
+   }
+ 
++  if (sourceLanguage !== undefined && sourceLanguage !== null) {
++    try {
++      statusLanguage = (
++        <>
++          ·
++          <span>
++            {new Intl.DisplayNames([intl.locale], { type: 'language' }).of(
++              sourceLanguage,
++            )}
++          </span>
++        </>
++      );
++    } catch {
++      statusLanguage = (
++        <>
++          ·<span>{sourceLanguage}</span>
++        </>
++      );
++    }
++  }
++
+   const visibilityLink = (
+     <>
+       ·<VisibilityIcon visibility={status.get('visibility')} />
+@@ -409,6 +435,7 @@ export const DetailedStatus: React.FC<{
+             </a>
+ 
+             {visibilityLink}
++            {statusLanguage}
+             {applicationLink}
+           </div>
+ 
+diff --git a/app/javascript/styles/mastodon/components.scss b/app/javascript/styles/mastodon/components.scss
+index 70b0da95be..352ea64efa 100644
+--- a/app/javascript/styles/mastodon/components.scss
++++ b/app/javascript/styles/mastodon/components.scss
+@@ -1560,6 +1560,15 @@ body > [data-popper-placement] {
+   order: 2;
+   flex: 0 0 auto;
+   color: $dark-text-color;
++  text-align: end;
++
++  &:hover {
++    text-decoration: none !important;
++
++    :not(.status__language-name) {
++      text-decoration: underline;
++    }
++  }
+ }
+ 
+ .notification__relative_time {

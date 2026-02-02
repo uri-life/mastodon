@@ -1,0 +1,81 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Tue, 16 Sep 2025 00:01:16 +0900
+Subject: [PATCH 1/4] Increase default fields size to 8
+
+
+diff --git a/app/models/account.rb b/app/models/account.rb
+index 73b35bcb7c..6354537385 100644
+--- a/app/models/account.rb
++++ b/app/models/account.rb
+@@ -67,7 +67,7 @@ class Account < ApplicationRecord
+   BACKGROUND_REFRESH_INTERVAL = 1.week.freeze
+   REFRESH_DEADLINE = 6.hours
+   STALE_THRESHOLD = 1.day
+-  DEFAULT_FIELDS_SIZE = 4
++  DEFAULT_FIELDS_SIZE = 8
+   INSTANCE_ACTOR_ID = -99
+ 
+   USERNAME_RE   = /[a-z0-9_]+([.-]+[a-z0-9_]+)*/i
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Wed, 9 Oct 2024 20:22:22 +0900
+Subject: [PATCH 2/4] Ensure bio field content does not truncate with ellipsis
+
+
+diff --git a/app/javascript/styles/mastodon/accounts.scss b/app/javascript/styles/mastodon/accounts.scss
+index 3854db0c39..7051864cc9 100644
+--- a/app/javascript/styles/mastodon/accounts.scss
++++ b/app/javascript/styles/mastodon/accounts.scss
+@@ -271,10 +271,6 @@
+     box-sizing: border-box;
+     padding: 14px;
+     text-align: center;
+-    max-height: 48px;
+-    overflow: hidden;
+-    white-space: nowrap;
+-    text-overflow: ellipsis;
+   }
+ 
+   dt {
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Wed, 9 Oct 2024 20:28:07 +0900
+Subject: [PATCH 3/4] Increase display name length limit to 80
+
+
+diff --git a/app/models/account.rb b/app/models/account.rb
+index 6354537385..4c7419afdc 100644
+--- a/app/models/account.rb
++++ b/app/models/account.rb
+@@ -75,7 +75,7 @@ class Account < ApplicationRecord
+   URL_PREFIX_RE = %r{\Ahttp(s?)://[^/]+}
+   USERNAME_ONLY_RE = /\A#{USERNAME_RE}\z/i
+   USERNAME_LENGTH_LIMIT = 30
+-  DISPLAY_NAME_LENGTH_LIMIT = 30
++  DISPLAY_NAME_LENGTH_LIMIT = 80
+   NOTE_LENGTH_LIMIT = 500
+ 
+   # Hard limits for federated content
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Wed, 9 Oct 2024 20:28:36 +0900
+Subject: [PATCH 4/4] Increase note length limit to 1000
+
+
+diff --git a/app/models/account.rb b/app/models/account.rb
+index 4c7419afdc..9832e9b6f6 100644
+--- a/app/models/account.rb
++++ b/app/models/account.rb
+@@ -76,7 +76,7 @@ class Account < ApplicationRecord
+   USERNAME_ONLY_RE = /\A#{USERNAME_RE}\z/i
+   USERNAME_LENGTH_LIMIT = 30
+   DISPLAY_NAME_LENGTH_LIMIT = 80
+-  NOTE_LENGTH_LIMIT = 500
++  NOTE_LENGTH_LIMIT = 1000
+ 
+   # Hard limits for federated content
+   USERNAME_LENGTH_HARD_LIMIT = 2048

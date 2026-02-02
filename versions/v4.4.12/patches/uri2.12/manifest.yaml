@@ -1,0 +1,23 @@
+features:
+  about: {}
+  api-limits: {}
+  avatar-default-existance: {}
+  blurhash: {}
+  branding: {}
+  emoji-file-size: {}
+  emoji-reactions: {}
+  emoji-regex: {}
+  emoji-size: {}
+  hash-color-tag: {}
+  hash-number: {}
+  mpeg-ext: {}
+  poll: {}
+  pretendard: {}
+  profile: {}
+  pull-mastodon-34818: {}
+  remove-get-app: {}
+  robots: {}
+  rounding: {}
+  status-language-name: {}
+  status-length: {}
+  timezone: {}

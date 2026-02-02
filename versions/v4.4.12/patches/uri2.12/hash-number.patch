@@ -1,0 +1,58 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Thu, 18 Sep 2025 12:07:09 +0000
+Subject: [PATCH] Update regex to support number-only and number-start hashtags
+
+
+diff --git a/app/javascript/mastodon/utils/hashtags.ts b/app/javascript/mastodon/utils/hashtags.ts
+index 0c5505c6c9..a0b2f05364 100644
+--- a/app/javascript/mastodon/utils/hashtags.ts
++++ b/app/javascript/mastodon/utils/hashtags.ts
+@@ -1,26 +1,25 @@
+ const HASHTAG_SEPARATORS = '_\\u00b7\\u200c';
+-const ALPHA = '\\p{L}\\p{M}';
+ const WORD = '\\p{L}\\p{M}\\p{N}\\p{Pc}';
+ 
+ const buildHashtagPatternRegex = () => {
+   try {
+     return new RegExp(
+-      `(?:^|[^\\/\\)\\w])#(([${WORD}_][${WORD}${HASHTAG_SEPARATORS}]*[${ALPHA}${HASHTAG_SEPARATORS}][${WORD}${HASHTAG_SEPARATORS}]*[${WORD}_])|([${WORD}_]*[${ALPHA}][${WORD}_]*))`,
++      `(?:^|[^\\/\\)\\w])#(([${WORD}_][${WORD}${HASHTAG_SEPARATORS}]*[${WORD}_])|([${WORD}_]*))`,
+       'iu',
+     );
+   } catch {
+-    return /(?:^|[^/)\w])#(\w*[a-zA-Z·]\w*)/i;
++    return /(?:^|[^/)\w])#([\w0-9]*[a-zA-Z0-9·][\w0-9]*)/i;
+   }
+ };
+ 
+ const buildHashtagRegex = () => {
+   try {
+     return new RegExp(
+-      `^(([${WORD}_][${WORD}${HASHTAG_SEPARATORS}]*[${ALPHA}${HASHTAG_SEPARATORS}][${WORD}${HASHTAG_SEPARATORS}]*[${WORD}_])|([${WORD}_]*[${ALPHA}][${WORD}_]*))$`,
++      `^(([${WORD}_][${WORD}${HASHTAG_SEPARATORS}]*[${WORD}_])|([${WORD}_]*))$`,
+       'iu',
+     );
+   } catch {
+-    return /^(\w*[a-zA-Z·]\w*)$/i;
++    return /^([\w0-9]*[a-zA-Z0-9·][\w0-9]*)$/i;
+   }
+ };
+ 
+diff --git a/app/models/tag.rb b/app/models/tag.rb
+index a3ccdd8ac6..b32b24ee85 100644
+--- a/app/models/tag.rb
++++ b/app/models/tag.rb
+@@ -35,10 +35,10 @@ class Tag < ApplicationRecord
+   has_one :trend, class_name: 'TagTrend', inverse_of: :tag, dependent: :destroy
+ 
+   HASHTAG_SEPARATORS = "_\u00B7\u30FB\u200c"
+-  HASHTAG_FIRST_SEQUENCE_CHUNK_ONE = "[[:word:]_][[:word:]#{HASHTAG_SEPARATORS}]*[[:alpha:]#{HASHTAG_SEPARATORS}]".freeze
++  HASHTAG_FIRST_SEQUENCE_CHUNK_ONE = "[[:word:]_][[:word:]#{HASHTAG_SEPARATORS}]*[[:word:]#{HASHTAG_SEPARATORS}]".freeze
+   HASHTAG_FIRST_SEQUENCE_CHUNK_TWO = "[[:word:]#{HASHTAG_SEPARATORS}]*[[:word:]_]".freeze
+   HASHTAG_FIRST_SEQUENCE = "(#{HASHTAG_FIRST_SEQUENCE_CHUNK_ONE}#{HASHTAG_FIRST_SEQUENCE_CHUNK_TWO})".freeze
+-  HASHTAG_LAST_SEQUENCE = '([[:word:]_]*[[:alpha:]][[:word:]_]*)'
++  HASHTAG_LAST_SEQUENCE = '([[:word:]_]*)'
+   HASHTAG_NAME_PAT = "#{HASHTAG_FIRST_SEQUENCE}|#{HASHTAG_LAST_SEQUENCE}".freeze
+ 
+   HASHTAG_RE = %r{(?<![=/)\p{Alnum}])#(#{HASHTAG_NAME_PAT})}

@@ -1,0 +1,18 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Sat, 26 Jul 2025 12:35:41 +0000
+Subject: [PATCH] Set timezone to Seoul
+
+
+diff --git a/config/application.rb b/config/application.rb
+index 90cfe47428..7d74521fea 100644
+--- a/config/application.rb
++++ b/config/application.rb
+@@ -73,6 +73,7 @@ module Mastodon
+     # in config/environments, which are processed later.
+     #
+     # config.time_zone = "Central Time (US & Canada)"
++    config.time_zone = 'Seoul'
+     # config.eager_load_paths << Rails.root.join("extras")
+ 
+     # config.paths.add File.join('app', 'api'), glob: File.join('**', '*.rb')

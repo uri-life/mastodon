@@ -1,0 +1,21 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Tue, 16 Sep 2025 00:27:12 +0900
+Subject: [PATCH] Remove "Get the app" link from link footer component
+
+
+diff --git a/app/javascript/mastodon/features/ui/components/link_footer.tsx b/app/javascript/mastodon/features/ui/components/link_footer.tsx
+index cbfb6a3114..11c124f7c7 100644
+--- a/app/javascript/mastodon/features/ui/components/link_footer.tsx
++++ b/app/javascript/mastodon/features/ui/components/link_footer.tsx
+@@ -76,10 +76,6 @@ export const LinkFooter: React.FC<{
+           <FormattedMessage id='footer.about' defaultMessage='About' />
+         </a>
+         <DividingCircle />
+-        <a href='https://joinmastodon.org/apps' target='_blank' rel='noopener'>
+-          <FormattedMessage id='footer.get_app' defaultMessage='Get the app' />
+-        </a>
+-        <DividingCircle />
+         <Link to='/keyboard-shortcuts'>
+           <FormattedMessage
+             id='footer.keyboard_shortcuts'
