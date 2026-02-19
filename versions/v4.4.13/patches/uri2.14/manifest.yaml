@@ -1,0 +1,4 @@
+inherits: uri2.13
+
+features:
+  hash-number: {}
