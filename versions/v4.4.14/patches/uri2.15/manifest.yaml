@@ -1,0 +1,4 @@
+inherits: uri2.14
+
+features:
+  emoji-reactions: {}
