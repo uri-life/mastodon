@@ -1,0 +1,128 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Mon, 25 May 2026 14:15:21 +0900
+Subject: [PATCH] Standardise media formats to MP4-based containers
+
+- Change video output extension to .m4v
+- Update FFmpeg configurations for MP4 containers
+- Migrate audio processing to AAC within M4A containers
+- Enable faststart for streaming audio playback
+- Register M4A in Rack::Mime and Paperclip mappings
+- Refactor GIF transcoder to use .m4v extension
+
+Rationale: Transitioning to standardised MP4-based containers improves compatibility, enables streaming support via faststart, and ensures consistent MIME type handling across the media processing pipeline.
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+
+diff --git a/app/models/media_attachment.rb b/app/models/media_attachment.rb
+index c40587748d..a8ac590920 100644
+--- a/app/models/media_attachment.rb
++++ b/app/models/media_attachment.rb
+@@ -94,12 +94,13 @@ class MediaAttachment < ApplicationRecord
+   }.freeze
+ 
+   VIDEO_FORMAT = {
+-    format: 'mp4',
++    format: 'm4v',
+     content_type: 'video/mp4',
+     vfr_frame_rate_threshold: MAX_VIDEO_FRAME_RATE,
+     convert_options: {
+       output: {
+         'loglevel' => 'fatal',
++        'f' => 'mp4',
+         'preset' => 'veryfast',
+         'movflags' => 'faststart', # Move metadata to start of file so playback can begin before download finishes
+         'pix_fmt' => 'yuv420p', # Ensure color space for cross-browser compatibility
+@@ -118,10 +119,11 @@ class MediaAttachment < ApplicationRecord
+     audio_codecs: ['aac', nil].freeze,
+     colorspaces: ['yuv420p', 'yuvj420p'].freeze,
+     options: {
+-      format: 'mp4',
++      format: 'm4v',
+       convert_options: {
+         output: {
+           'loglevel' => 'fatal',
++          'f' => 'mp4',
+           'map_metadata' => '-1',
+           'movflags' => 'faststart', # Move metadata to start of file so playback can begin before download finishes
+           'c:v' => 'copy',
+@@ -150,12 +152,16 @@ class MediaAttachment < ApplicationRecord
+ 
+   AUDIO_STYLES = {
+     original: {
+-      format: 'mp3',
+-      content_type: 'audio/mpeg',
++      format: 'm4a',
++      content_type: 'audio/mp4',
+       convert_options: {
+         output: {
+           'loglevel' => 'fatal',
+-          'q:a' => 2,
++          'map' => '0:a:0',
++          'f' => 'mp4',
++          'movflags' => 'faststart', # Move metadata to start of file so playback can begin before download finishes
++          'c:a' => 'aac',
++          'b:a' => '256k',
+         }.freeze,
+       }.freeze,
+     }.freeze,
+diff --git a/config/initializers/mime_types.rb b/config/initializers/mime_types.rb
+index 4cf6bfbf34..4bcfc268b9 100644
+--- a/config/initializers/mime_types.rb
++++ b/config/initializers/mime_types.rb
+@@ -2,3 +2,5 @@
+ 
+ Mime::Type.register 'application/json', :json, %w(text/x-json application/jsonrequest application/jrd+json application/activity+json application/ld+json)
+ Mime::Type.register 'text/xml',         :xml,  %w(application/xml application/atom+xml application/xrd+xml)
++
++Rack::Mime::MIME_TYPES['.m4a'] = 'audio/mp4'
+diff --git a/config/initializers/paperclip.rb b/config/initializers/paperclip.rb
+index b444c5611b..4481a9701b 100644
+--- a/config/initializers/paperclip.rb
++++ b/config/initializers/paperclip.rb
+@@ -169,7 +169,10 @@ else
+ end
+ 
+ Rails.application.reloader.to_prepare do
+-  Paperclip.options[:content_type_mappings] = { csv: %w(text/plain text/csv application/csv) }
++  Paperclip.options[:content_type_mappings] = {
++    csv: %w(text/plain text/csv application/csv),
++    m4a: %w(audio/mp4 audio/MP4A-LATM video/mp4),
++  }
+ end
+ 
+ # In some places in the code, we rescue this exception, but we don't always
+diff --git a/lib/paperclip/gif_transcoder.rb b/lib/paperclip/gif_transcoder.rb
+index 32bdb8a863..1707518a2f 100644
+--- a/lib/paperclip/gif_transcoder.rb
++++ b/lib/paperclip/gif_transcoder.rb
+@@ -109,7 +109,7 @@ module Paperclip
+       final_file = Paperclip::Transcoder.make(file, options, attachment)
+ 
+       if options[:style] == :original
+-        attachment.instance.file_file_name    = "#{File.basename(attachment.instance.file_file_name, '.*')}.mp4"
++        attachment.instance.file_file_name    = "#{File.basename(attachment.instance.file_file_name, '.*')}.m4v"
+         attachment.instance.file_content_type = 'video/mp4'
+         attachment.instance.type              = MediaAttachment.types[:gifv]
+       end
+diff --git a/lib/paperclip/transcoder.rb b/lib/paperclip/transcoder.rb
+index 47e3f9f547..45af8b33bb 100644
+--- a/lib/paperclip/transcoder.rb
++++ b/lib/paperclip/transcoder.rb
+@@ -6,6 +6,7 @@ module Paperclip
+   class Transcoder < Paperclip::Processor
+     # This is the H.264 "High" value taken from https://www.dr-lex.be/info-stuff/videocalc.html
+     BITS_PER_PIXEL = 0.11
++    MP4_OUTPUT_FORMATS = %w(mp4 m4v).freeze
+ 
+     def initialize(file, options = {}, attachment = nil)
+       super
+@@ -39,7 +40,7 @@ module Paperclip
+ 
+         @output_options['f']       = 'image2'
+         @output_options['vframes'] = 1
+-      when 'mp4'
++      when *MP4_OUTPUT_FORMATS
+         unless eligible_to_passthrough?(metadata)
+           size_limit_in_bits = MediaAttachment::VIDEO_LIMIT * 8
+           desired_bitrate = (metadata.width * metadata.height * 30 * BITS_PER_PIXEL).floor

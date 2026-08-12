@@ -1,0 +1,1088 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Sun, 24 May 2026 19:24:15 +0900
+Subject: [PATCH 1/3] Implement custom locale override support for backend and
+ frontend
+
+- Configure Rails to prioritise custom translation files in the load path
+- Refactor the frontend locale loader to merge custom JSON assets
+- Update Vite and Storybook to recognise and include custom translations
+- Adjust the service worker to incorporate merged locale files
+- Add RSpec and Vitest suites to validate the override behaviour
+
+Rationale: Users require a robust method to customise language strings without modifying core files, ensuring that local overrides persist across updates and remain maintainable.
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+
+diff --git a/.storybook/preview.tsx b/.storybook/preview.tsx
+index d66f0fb11a..0fbd836284 100644
+--- a/.storybook/preview.tsx
++++ b/.storybook/preview.tsx
+@@ -11,7 +11,7 @@ import type { Preview } from '@storybook/react-vite';
+ import { initialize, mswLoader } from 'msw-storybook-addon';
+ import { action } from 'storybook/actions';
+ 
+-import type { LocaleData } from '@/mastodon/locales';
++import { getAvailableLocaleNames, loadLocaleMessages } from '@/mastodon/locales';
+ import { reducerWithInitialState } from '@/mastodon/reducers';
+ import { defaultMiddleware } from '@/mastodon/store/store';
+ import { mockHandlers, unhandledRequestHandler } from '@/testing/api';
+@@ -21,10 +21,6 @@ import { mockHandlers, unhandledRequestHandler } from '@/testing/api';
+ import '../app/javascript/styles/mastodon-light.scss';
+ import './styles.css';
+ 
+-const localeFiles = import.meta.glob('@/mastodon/locales/*.json', {
+-  query: { as: 'json' },
+-});
+-
+ // Initialize MSW
+ initialize({
+   onUnhandledRequest: unhandledRequestHandler,
+@@ -39,9 +35,7 @@ const preview: Preview = {
+       toolbar: {
+         title: 'Locale',
+         icon: 'globe',
+-        items: Object.keys(localeFiles).map((path) =>
+-          path.replace('/mastodon/locales/', '').replace('.json', ''),
+-        ),
++        items: getAvailableLocaleNames(),
+         dynamicTitle: true,
+       },
+     },
+@@ -88,9 +82,7 @@ const preview: Preview = {
+ 
+       useEffect(() => {
+         async function loadLocaleData() {
+-          const { default: localeFile } = (await import(
+-            `@/mastodon/locales/${currentLocale}.json`
+-          )) as { default: LocaleData['messages'] };
++          const localeFile = await loadLocaleMessages(currentLocale);
+           setMessages((prevLocales) => ({
+             ...prevLocales,
+             [currentLocale]: localeFile,
+diff --git a/app/javascript/mastodon/locales/index.ts b/app/javascript/mastodon/locales/index.ts
+index 63f45c3047..b79975551a 100644
+--- a/app/javascript/mastodon/locales/index.ts
++++ b/app/javascript/mastodon/locales/index.ts
+@@ -1,5 +1,9 @@
+ export type { LocaleData } from './global_locale';
+ export { setLocale, getLocale, isLocaleLoaded } from './global_locale';
+-export { loadLocale } from './load_locale';
++export {
++  getAvailableLocaleNames,
++  loadLocale,
++  loadLocaleMessages,
++} from './load_locale';
+ 
+ export { IntlProvider } from './intl_provider';
+diff --git a/app/javascript/mastodon/locales/load_locale.test.ts b/app/javascript/mastodon/locales/load_locale.test.ts
+new file mode 100644
+index 0000000000..cfb4cdf82f
+--- /dev/null
++++ b/app/javascript/mastodon/locales/load_locale.test.ts
+@@ -0,0 +1,140 @@
++import { getAvailableLocaleNames, loadLocaleMessages } from './load_locale';
++
++type LocaleFileMap = NonNullable<Parameters<typeof loadLocaleMessages>[1]>;
++
++function localeFile(messages: Record<string, string>) {
++  return () => Promise.resolve({ default: messages });
++}
++
++describe('getAvailableLocaleNames', () => {
++  test('returns locale names from upstream locale files', () => {
++    expect(
++      getAvailableLocaleNames({
++        './en.json': localeFile({}),
++        './pt-BR.json': localeFile({}),
++      }),
++    ).toEqual(['en', 'pt-BR']);
++  });
++});
++
++describe('loadLocaleMessages', () => {
++  test('merges custom messages over upstream messages', async () => {
++    const upstreamLocales: LocaleFileMap = {
++      './en.json': localeFile({
++        'compose_form.placeholder': 'What is on your mind?',
++        'navigation_bar.home': 'Home',
++      }),
++    };
++    const customLocales: LocaleFileMap = {
++      './custom/en.json': localeFile({
++        'compose_form.placeholder': 'Custom placeholder',
++      }),
++    };
++
++    await expect(
++      loadLocaleMessages('en', upstreamLocales, customLocales),
++    ).resolves.toEqual({
++      'compose_form.placeholder': 'Custom placeholder',
++      'navigation_bar.home': 'Home',
++    });
++  });
++
++  test('merges multiple custom files for the same locale in path order', async () => {
++    const upstreamLocales: LocaleFileMap = {
++      './en.json': localeFile({
++        'compose_form.placeholder': 'What is on your mind?',
++        'navigation_bar.home': 'Home',
++      }),
++    };
++    const customLocales: LocaleFileMap = {
++      './custom/branch-a/en.json': localeFile({
++        'compose_form.placeholder': 'Custom placeholder',
++      }),
++      './custom/branch-b/en.json': localeFile({
++        'compose_form.placeholder': 'Custom placeholder from branch B',
++        'navigation_bar.home': 'Custom home',
++      }),
++    };
++
++    await expect(
++      loadLocaleMessages('en', upstreamLocales, customLocales),
++    ).resolves.toEqual({
++      'compose_form.placeholder': 'Custom placeholder from branch B',
++      'navigation_bar.home': 'Custom home',
++    });
++  });
++
++  test('ignores custom files for other locales in nested directories', async () => {
++    const upstreamLocales: LocaleFileMap = {
++      './ko.json': localeFile({
++        'navigation_bar.home': '홈',
++      }),
++    };
++    const customLocales: LocaleFileMap = {
++      './custom/branch-a/en.json': localeFile({
++        'navigation_bar.home': 'Custom home',
++      }),
++      './custom/branch-a/ko.json': localeFile({
++        'navigation_bar.home': '커스텀 홈',
++      }),
++    };
++
++    await expect(
++      loadLocaleMessages('ko', upstreamLocales, customLocales),
++    ).resolves.toEqual({
++      'navigation_bar.home': '커스텀 홈',
++    });
++  });
++
++  test('returns upstream messages when there is no custom locale file', async () => {
++    const upstreamLocales: LocaleFileMap = {
++      './en.json': localeFile({
++        'navigation_bar.home': 'Home',
++      }),
++    };
++
++    await expect(
++      loadLocaleMessages('en', upstreamLocales, {}),
++    ).resolves.toEqual({
++      'navigation_bar.home': 'Home',
++    });
++  });
++
++  test('falls back to english without applying unsupported custom locale files', async () => {
++    const upstreamLocales: LocaleFileMap = {
++      './en.json': localeFile({
++        'navigation_bar.home': 'Home',
++      }),
++    };
++    const customLocales: LocaleFileMap = {
++      './custom/zz.json': localeFile({
++        'navigation_bar.home': 'Unsupported custom home',
++      }),
++    };
++
++    await expect(
++      loadLocaleMessages('zz', upstreamLocales, customLocales),
++    ).resolves.toEqual({
++      'navigation_bar.home': 'Home',
++    });
++  });
++
++  test('applies custom english messages when falling back to english', async () => {
++    const upstreamLocales: LocaleFileMap = {
++      './en.json': localeFile({
++        'navigation_bar.home': 'Home',
++      }),
++    };
++    const customLocales: LocaleFileMap = {
++      './custom/en.json': localeFile({
++        'navigation_bar.home': 'Custom home',
++      }),
++    };
++
++    await expect(
++      loadLocaleMessages('zz', upstreamLocales, customLocales),
++    ).resolves.toEqual({
++      'navigation_bar.home': 'Custom home',
++    });
++  });
++});
+diff --git a/app/javascript/mastodon/locales/load_locale.ts b/app/javascript/mastodon/locales/load_locale.ts
+index 94c7db1141..a969f2c347 100644
+--- a/app/javascript/mastodon/locales/load_locale.ts
++++ b/app/javascript/mastodon/locales/load_locale.ts
+@@ -8,6 +8,67 @@ const localeLoadingSemaphore = new Semaphore(1);
+ const localeFiles = import.meta.glob<{ default: LocaleData['messages'] }>([
+   './*.json',
+ ]);
++const customLocaleFiles = import.meta.glob<{ default: LocaleData['messages'] }>(
++  ['./custom/**/*.json'],
++);
++
++type LocaleFileMap = Record<
++  string,
++  () => Promise<{ default: LocaleData['messages'] }>
++>;
++
++const localePath = (locale: string) => `./${locale}.json`;
++
++export function getAvailableLocaleNames(locales: LocaleFileMap = localeFiles) {
++  return Object.keys(locales).map((path) =>
++    path.replace('./', '').replace('.json', ''),
++  );
++}
++
++export async function loadLocaleMessages(
++  locale: string,
++  locales: LocaleFileMap = localeFiles,
++  customLocales: LocaleFileMap = customLocaleFiles,
++) {
++  const upstreamLocalePath = localePath(locale);
++  const hasUpstreamLocale = Object.hasOwn(locales, upstreamLocalePath);
++  const resolvedLocale = hasUpstreamLocale ? locale : 'en';
++
++  const localeFile = locales[localePath(resolvedLocale)];
++
++  if (!localeFile) throw new Error('Could not load the locale JSON file');
++
++  const { default: upstreamLocaleData } = await localeFile();
++  const customLocaleData = await loadCustomLocaleMessages(
++    resolvedLocale,
++    customLocales,
++  );
++
++  return { ...upstreamLocaleData, ...customLocaleData };
++}
++
++async function loadCustomLocaleMessages(
++  locale: string,
++  customLocales: LocaleFileMap,
++) {
++  const customLocalePaths = Object.keys(customLocales)
++    .filter((path) => path.endsWith(`/${locale}.json`))
++    .sort();
++  const customLocaleFiles = await Promise.all(
++    customLocalePaths.map(async (path) => {
++      const customLocaleFile = customLocales[path];
++
++      if (!customLocaleFile)
++        throw new Error('Could not load the custom locale JSON file');
++
++      const { default: customLocaleData } = await customLocaleFile();
++
++      return customLocaleData;
++    }),
++  );
++
++  return Object.assign({}, ...customLocaleFiles) as LocaleData['messages'];
++}
+ 
+ export async function loadLocale() {
+   // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- we want to match empty strings
+@@ -21,14 +82,7 @@ export async function loadLocale() {
+     // if the locale is already set, then do nothing
+     if (isLocaleLoaded()) return;
+ 
+-    // If there is no locale file, then fallback to english
+-    const localeFile = Object.hasOwn(localeFiles, `./${locale}.json`)
+-      ? localeFiles[`./${locale}.json`]
+-      : localeFiles['./en.json'];
+-
+-    if (!localeFile) throw new Error('Could not load the locale JSON file');
+-
+-    const { default: localeData } = await localeFile();
++    const localeData = await loadLocaleMessages(locale);
+ 
+     setLocale({ messages: localeData, locale });
+   });
+diff --git a/app/javascript/mastodon/locales/service_worker_locale.test.ts b/app/javascript/mastodon/locales/service_worker_locale.test.ts
+new file mode 100644
+index 0000000000..64dd6d0ac3
+--- /dev/null
++++ b/app/javascript/mastodon/locales/service_worker_locale.test.ts
+@@ -0,0 +1,56 @@
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++
++import { loadServiceWorkerLocales } from '../../../../config/vite/plugin-sw-locales';
++
++describe('loadServiceWorkerLocales', () => {
++  let rootPath: string;
++  let localesPath: string;
++  let customLocalesPath: string;
++
++  beforeEach(() => {
++    rootPath = fs.mkdtempSync(path.join(os.tmpdir(), 'mastodon-sw-locales-'));
++    localesPath = path.join(rootPath, 'locales');
++    customLocalesPath = path.join(localesPath, 'custom');
++    fs.mkdirSync(customLocalesPath, { recursive: true });
++  });
++
++  afterEach(() => {
++    fs.rmSync(rootPath, { recursive: true });
++  });
++
++  test('merges custom locale messages before filtering service-worker keys', () => {
++    fs.writeFileSync(
++      path.join(localesPath, 'en.json'),
++      JSON.stringify({
++        'notification.follow': '{name} followed you',
++        'notification.mentioned_you': '{name} mentioned you',
++        ignored: 'Ignored upstream',
++      }),
++    );
++    fs.mkdirSync(path.join(customLocalesPath, 'branch-a'), { recursive: true });
++    fs.mkdirSync(path.join(customLocalesPath, 'branch-b'), { recursive: true });
++    fs.writeFileSync(
++      path.join(customLocalesPath, 'branch-a', 'en.json'),
++      JSON.stringify({
++        'notification.follow': 'Custom follow',
++        'notification.mentioned_you': 'Custom mention',
++        ignored: 'Ignored custom',
++      }),
++    );
++    fs.writeFileSync(
++      path.join(customLocalesPath, 'branch-b', 'en.json'),
++      JSON.stringify({
++        'notification.follow': 'Custom follow from branch B',
++      }),
++    );
++
++    expect(loadServiceWorkerLocales(localesPath, customLocalesPath)).toEqual({
++      en: {
++        'notification.follow': 'Custom follow from branch B',
++        'notification.mention': 'Custom mention',
++      },
++    });
++  });
++});
+diff --git a/config/initializers/i18n.rb b/config/initializers/i18n.rb
+index 5e8d3a545e..730ca788ee 100644
+--- a/config/initializers/i18n.rb
++++ b/config/initializers/i18n.rb
+@@ -1,6 +1,20 @@
+ # frozen_string_literal: true
+ 
+ Rails.application.configure do
++  custom_locale_paths = -> { Rails.root.glob('config/locales/custom/**/*.{rb,yml}').map(&:to_s) }
++
++  # Rails auto-discovers files under config/locales. Move custom locale files to
++  # the end so they always override upstream-provided translations.
++  paths = custom_locale_paths.call
++  config.i18n.load_path = (config.i18n.load_path - paths) + paths
++
++  config.after_initialize do
++    paths = custom_locale_paths.call
++
++    config.i18n.load_path = (config.i18n.load_path - paths) + paths
++    I18n.load_path = (I18n.load_path - paths) + paths
++  end
++
+   config.i18n.available_locales = [
+     :af,
+     :an,
+diff --git a/config/vite/plugin-sw-locales.ts b/config/vite/plugin-sw-locales.ts
+index e3542e86ba..251c9f092d 100644
+--- a/config/vite/plugin-sw-locales.ts
++++ b/config/vite/plugin-sw-locales.ts
+@@ -59,39 +59,12 @@ export function MastodonServiceWorkerLocales(): Plugin {
+     },
+     load(id) {
+       if (id === resolvedVirtualModuleId) {
+-        const filteredLocales: Record<string, Record<string, string>> = {};
+         const localesPath = path.resolve(config.root, 'mastodon/locales');
+-
+-        const filenames = fs.readdirSync(localesPath);
+-
+-        filenames
+-          .filter((filename) => /[a-zA-Z-]+\.json$/.exec(filename))
+-          .forEach((filename) => {
+-            const content = fs.readFileSync(
+-              path.resolve(localesPath, filename),
+-              'utf-8',
+-            );
+-            const full = JSON.parse(content) as Record<string, string>;
+-            const locale = filename.split('.')[0];
+-
+-            if (!locale)
+-              throw new Error('Could not parse locale from filename');
+-
+-            const filteredLocale: Record<string, string> = {};
+-
+-            Object.entries(full).forEach(([key, value]) => {
+-              if (KEEP_KEYS.includes(key)) {
+-                filteredLocale[key] = value;
+-              }
+-            });
+-
+-            Object.entries(CUSTOM_TRANSLATIONS).forEach(([key, value]) => {
+-              const translation = full[value];
+-              if (translation) filteredLocale[key] = translation;
+-            });
+-
+-            filteredLocales[locale] = filteredLocale;
+-          });
++        const customLocalesPath = path.resolve(localesPath, 'custom');
++        const filteredLocales = loadServiceWorkerLocales(
++          localesPath,
++          customLocalesPath,
++        );
+ 
+         return `const locales = ${JSON.stringify(filteredLocales)}; \n export default locales;`;
+       }
+@@ -100,3 +73,67 @@ export function MastodonServiceWorkerLocales(): Plugin {
+     },
+   };
+ }
++
++export function loadServiceWorkerLocales(
++  localesPath: string,
++  customLocalesPath: string,
++) {
++  const filteredLocales: Record<string, Record<string, string>> = {};
++  const filenames = fs.readdirSync(localesPath);
++
++  filenames
++    .filter((filename) => /[a-zA-Z-]+\.json$/.exec(filename))
++    .forEach((filename) => {
++      const full = {
++        ...readLocaleFile(path.resolve(localesPath, filename)),
++        ...readCustomLocaleFiles(customLocalesPath, filename),
++      };
++      const locale = filename.split('.')[0];
++
++      if (!locale) throw new Error('Could not parse locale from filename');
++
++      const filteredLocale: Record<string, string> = {};
++
++      Object.entries(full).forEach(([key, value]) => {
++        if (KEEP_KEYS.includes(key)) {
++          filteredLocale[key] = value;
++        }
++      });
++
++      Object.entries(CUSTOM_TRANSLATIONS).forEach(([key, value]) => {
++        const translation = full[value];
++        if (translation) filteredLocale[key] = translation;
++      });
++
++      filteredLocales[locale] = filteredLocale;
++    });
++
++  return filteredLocales;
++}
++
++function readLocaleFile(localePath: string) {
++  const content = fs.readFileSync(localePath, 'utf-8');
++  return JSON.parse(content) as Record<string, string>;
++}
++
++function readCustomLocaleFiles(customLocalesPath: string, filename: string) {
++  return findCustomLocaleFiles(customLocalesPath, filename).reduce<
++    Record<string, string>
++  >(
++    (messages, localePath) => ({
++      ...messages,
++      ...readLocaleFile(localePath),
++    }),
++    {},
++  );
++}
++
++function findCustomLocaleFiles(customLocalesPath: string, filename: string) {
++  if (!fs.existsSync(customLocalesPath)) return [];
++
++  return fs
++    .readdirSync(customLocalesPath, { recursive: true, withFileTypes: true })
++    .filter((entry) => entry.isFile() && entry.name === filename)
++    .map((entry) => path.resolve(entry.parentPath, entry.name))
++    .sort();
++}
+diff --git a/spec/locales/custom_locale_spec.rb b/spec/locales/custom_locale_spec.rb
+new file mode 100644
+index 0000000000..366c7c5a74
+--- /dev/null
++++ b/spec/locales/custom_locale_spec.rb
+@@ -0,0 +1,64 @@
++# frozen_string_literal: true
++
++require 'rails_helper'
++
++RSpec.describe 'Custom locale overrides' do # rubocop:disable RSpec/DescribeClass
++  let(:custom_locale_dir) { Rails.root.join('config', 'locales', 'custom') }
++  let(:custom_en_locale_file) { custom_locale_dir.join('custom_locale_spec.en.yml') }
++  let(:custom_unsupported_locale_file) { custom_locale_dir.join('custom_locale_spec.zz.yml') }
++
++  around do |example|
++    original_config_load_path = Rails.application.config.i18n.load_path.dup
++    original_i18n_load_path = I18n.load_path.dup
++    original_available_locales = Rails.application.config.i18n.available_locales.dup
++    original_default_locale = Rails.application.config.i18n.default_locale
++    custom_locale_dir_existed = custom_locale_dir.exist?
++
++    FileUtils.mkdir_p(custom_locale_dir)
++    custom_en_locale_file.write(<<~YAML)
++      en:
++        auth:
++          login: Custom login
++    YAML
++    custom_unsupported_locale_file.write(<<~YAML)
++      zz:
++        auth:
++          login: Unsupported custom login
++    YAML
++
++    Rails.application.config.i18n.load_path.unshift(custom_en_locale_file.to_s)
++    Rails.application.config.i18n.load_path.unshift(custom_unsupported_locale_file.to_s)
++
++    load Rails.root.join('config', 'initializers', 'i18n.rb')
++    I18n.load_path = Rails.application.config.i18n.load_path
++    I18n.backend.reload!
++
++    example.run
++  ensure
++    custom_en_locale_file.delete if custom_en_locale_file.exist?
++    custom_unsupported_locale_file.delete if custom_unsupported_locale_file.exist?
++    custom_locale_dir.rmdir if !custom_locale_dir_existed && custom_locale_dir.exist? && custom_locale_dir.children.empty?
++
++    Rails.application.config.i18n.load_path = original_config_load_path
++    I18n.load_path = original_i18n_load_path
++    Rails.application.config.i18n.available_locales = original_available_locales
++    I18n.available_locales = original_available_locales
++    Rails.application.config.i18n.default_locale = original_default_locale
++    I18n.default_locale = original_default_locale
++    I18n.backend.reload!
++  end
++
++  it 'loads custom locale files after upstream locale files' do
++    custom_paths = [custom_en_locale_file, custom_unsupported_locale_file].map(&:to_s).sort
++
++    expect(I18n.load_path.last(2)).to eq(custom_paths)
++  end
++
++  it 'allows custom files to override existing upstream locale keys' do
++    expect(I18n.t('auth.login', locale: :en)).to eq('Custom login')
++  end
++
++  it 'does not add unsupported custom locale codes to available locales' do
++    expect(I18n.available_locales).to_not include(:zz)
++  end
++end
+diff --git a/vite.config.mts b/vite.config.mts
+index 30946d0c2c..278186ade8 100644
+--- a/vite.config.mts
++++ b/vite.config.mts
+@@ -127,7 +127,11 @@ export const config: UserConfigFnPromise = async ({ mode, command }) => {
+             if (!facadeModuleId) {
+               return '[name]-[hash].js';
+             }
+-            if (/mastodon\/locales\/[a-zA-Z\-]+\.json/.exec(facadeModuleId)) {
++            if (
++              /mastodon\/locales\/(?:custom\/)?[a-zA-Z\-]+\.json/.exec(
++                facadeModuleId,
++              )
++            ) {
+               // put all locale files in `intl/`
+               return 'intl/[name]-[hash].js';
+             } else if (/node_modules\/@formatjs\//.exec(facadeModuleId)) {
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Mon, 25 May 2026 10:56:45 +0900
+Subject: [PATCH 2/3] Force global custom English locale overrides
+
+- Inject custom English translations into all non-English locales at runtime
+- Update frontend locale loader to merge custom strings into all languages
+- Integrate custom English messages into the service worker locale assets
+- Add comprehensive test coverage to verify override precedence
+
+Rationale: Consolidating custom English strings as a global fallback ensures consistent terminology across the interface and provides administrators with a reliable method to customise text regardless of the user's selected language.
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+
+diff --git a/app/javascript/mastodon/locales/load_locale.test.ts b/app/javascript/mastodon/locales/load_locale.test.ts
+index cfb4cdf82f..cf582c92bc 100644
+--- a/app/javascript/mastodon/locales/load_locale.test.ts
++++ b/app/javascript/mastodon/locales/load_locale.test.ts
+@@ -64,10 +64,11 @@ describe('loadLocaleMessages', () => {
+     });
+   });
+ 
+-  test('ignores custom files for other locales in nested directories', async () => {
++  test('applies custom english messages over other custom locales', async () => {
+     const upstreamLocales: LocaleFileMap = {
+       './ko.json': localeFile({
+         'navigation_bar.home': '홈',
++        'navigation_bar.profile': '프로필',
+       }),
+     };
+     const customLocales: LocaleFileMap = {
+@@ -76,13 +77,34 @@ describe('loadLocaleMessages', () => {
+       }),
+       './custom/branch-a/ko.json': localeFile({
+         'navigation_bar.home': '커스텀 홈',
++        'navigation_bar.profile': '커스텀 프로필',
+       }),
+     };
+ 
+     await expect(
+       loadLocaleMessages('ko', upstreamLocales, customLocales),
+     ).resolves.toEqual({
+-      'navigation_bar.home': '커스텀 홈',
++      'navigation_bar.home': 'Custom home',
++      'navigation_bar.profile': '커스텀 프로필',
++    });
++  });
++
++  test('applies custom english messages over upstream messages from other locales', async () => {
++    const upstreamLocales: LocaleFileMap = {
++      './de.json': localeFile({
++        'navigation_bar.home': 'Startseite',
++      }),
++    };
++    const customLocales: LocaleFileMap = {
++      './custom/en.json': localeFile({
++        'navigation_bar.home': 'Custom home',
++      }),
++    };
++
++    await expect(
++      loadLocaleMessages('de', upstreamLocales, customLocales),
++    ).resolves.toEqual({
++      'navigation_bar.home': 'Custom home',
+     });
+   });
+ 
+diff --git a/app/javascript/mastodon/locales/load_locale.ts b/app/javascript/mastodon/locales/load_locale.ts
+index a969f2c347..0a24635752 100644
+--- a/app/javascript/mastodon/locales/load_locale.ts
++++ b/app/javascript/mastodon/locales/load_locale.ts
+@@ -43,8 +43,16 @@ export async function loadLocaleMessages(
+     resolvedLocale,
+     customLocales,
+   );
+-
+-  return { ...upstreamLocaleData, ...customLocaleData };
++  const customEnglishLocaleData =
++    resolvedLocale === 'en'
++      ? {}
++      : await loadCustomLocaleMessages('en', customLocales);
++
++  return {
++    ...upstreamLocaleData,
++    ...customLocaleData,
++    ...customEnglishLocaleData,
++  };
+ }
+ 
+ async function loadCustomLocaleMessages(
+diff --git a/app/javascript/mastodon/locales/service_worker_locale.test.ts b/app/javascript/mastodon/locales/service_worker_locale.test.ts
+index 64dd6d0ac3..c4188cb982 100644
+--- a/app/javascript/mastodon/locales/service_worker_locale.test.ts
++++ b/app/javascript/mastodon/locales/service_worker_locale.test.ts
+@@ -53,4 +53,46 @@ describe('loadServiceWorkerLocales', () => {
+       },
+     });
+   });
++
++  test('applies custom english messages over other service-worker locales', () => {
++    fs.writeFileSync(
++      path.join(localesPath, 'en.json'),
++      JSON.stringify({
++        'notification.follow': '{name} followed you',
++        'notification.mentioned_you': '{name} mentioned you',
++      }),
++    );
++    fs.writeFileSync(
++      path.join(localesPath, 'ko.json'),
++      JSON.stringify({
++        'notification.follow': '{name} 님이 팔로우했습니다',
++        'notification.mentioned_you': '{name} 님이 나를 멘션했습니다',
++      }),
++    );
++    fs.mkdirSync(path.join(customLocalesPath, 'branch-a'), { recursive: true });
++    fs.writeFileSync(
++      path.join(customLocalesPath, 'branch-a', 'en.json'),
++      JSON.stringify({
++        'notification.follow': 'Custom follow',
++        'notification.mentioned_you': 'Custom mention',
++      }),
++    );
++    fs.writeFileSync(
++      path.join(customLocalesPath, 'branch-a', 'ko.json'),
++      JSON.stringify({
++        'notification.follow': 'Custom Korean follow',
++      }),
++    );
++
++    expect(loadServiceWorkerLocales(localesPath, customLocalesPath)).toEqual({
++      en: {
++        'notification.follow': 'Custom follow',
++        'notification.mention': 'Custom mention',
++      },
++      ko: {
++        'notification.follow': 'Custom follow',
++        'notification.mention': 'Custom mention',
++      },
++    });
++  });
+ });
+diff --git a/config/initializers/i18n.rb b/config/initializers/i18n.rb
+index 730ca788ee..528ffebdbe 100644
+--- a/config/initializers/i18n.rb
++++ b/config/initializers/i18n.rb
+@@ -1,18 +1,92 @@
+ # frozen_string_literal: true
+ 
++module Mastodon::CustomLocaleOverrides
++  CUSTOM_LOCALE_PATTERN = 'config/locales/custom/**/*.{rb,yml}' unless const_defined?(:CUSTOM_LOCALE_PATTERN)
++
++  module BackendExtension
++    def load_translations(*filenames)
++      super.tap do
++        Mastodon::CustomLocaleOverrides.apply_non_english_overrides!(self) if filenames.empty?
++      end
++    end
++  end
++
++  class << self
++    def paths
++      Rails.root.glob(CUSTOM_LOCALE_PATTERN).map(&:to_s)
++    end
++
++    def install!(backend)
++      backend.singleton_class.prepend(BackendExtension) unless backend.singleton_class.ancestors.include?(BackendExtension)
++    end
++
++    def apply_non_english_overrides!(backend)
++      overrides = english_overrides
++      return if overrides.empty?
++
++      translations = backend.translations
++
++      I18n.available_locales.each do |locale|
++        locale = locale.to_sym
++        next if locale == :en || !translations.key?(locale)
++
++        overrides.each { |key, value| set_key!(translations[locale], key, value) }
++      end
++    end
++
++    private
++
++    def english_overrides
++      paths.each_with_object({}) do |path, overrides|
++        flatten_translations(load_locale_file(path).fetch(:en, {})).each do |key, value|
++          overrides[key] = value
++        end
++      end
++    end
++
++    def load_locale_file(path)
++      backend = I18n::Backend::Simple.new
++      backend.load_translations(path)
++      backend.translations
++    end
++
++    def flatten_translations(translations, prefix = [])
++      translations.flat_map do |key, value|
++        key_path = prefix + [key.to_sym]
++
++        value.is_a?(Hash) ? flatten_translations(value, key_path) : [[key_path, value]]
++      end
++    end
++
++    def set_key!(translations, key, value)
++      current = translations
++
++      key[0...-1].each do |segment|
++        current[segment] = current[segment].is_a?(Hash) ? current[segment].dup : {}
++
++        current = current[segment]
++      end
++
++      current[key.last] = value
++    end
++  end
++end
++
+ Rails.application.configure do
+-  custom_locale_paths = -> { Rails.root.glob('config/locales/custom/**/*.{rb,yml}').map(&:to_s) }
++  custom_locale_paths = -> { Mastodon::CustomLocaleOverrides.paths }
+ 
+   # Rails auto-discovers files under config/locales. Move custom locale files to
+   # the end so they always override upstream-provided translations.
+   paths = custom_locale_paths.call
+   config.i18n.load_path = (config.i18n.load_path - paths) + paths
++  Mastodon::CustomLocaleOverrides.install!(I18n.backend)
+ 
+   config.after_initialize do
+     paths = custom_locale_paths.call
+ 
+     config.i18n.load_path = (config.i18n.load_path - paths) + paths
+     I18n.load_path = (I18n.load_path - paths) + paths
++    Mastodon::CustomLocaleOverrides.install!(I18n.backend)
+   end
+ 
+   config.i18n.available_locales = [
+diff --git a/config/vite/plugin-sw-locales.ts b/config/vite/plugin-sw-locales.ts
+index 251c9f092d..3df427af3a 100644
+--- a/config/vite/plugin-sw-locales.ts
++++ b/config/vite/plugin-sw-locales.ts
+@@ -80,6 +80,10 @@ export function loadServiceWorkerLocales(
+ ) {
+   const filteredLocales: Record<string, Record<string, string>> = {};
+   const filenames = fs.readdirSync(localesPath);
++  const customEnglishLocaleData = readCustomLocaleFiles(
++    customLocalesPath,
++    'en.json',
++  );
+ 
+   filenames
+     .filter((filename) => /[a-zA-Z-]+\.json$/.exec(filename))
+@@ -87,6 +91,7 @@ export function loadServiceWorkerLocales(
+       const full = {
+         ...readLocaleFile(path.resolve(localesPath, filename)),
+         ...readCustomLocaleFiles(customLocalesPath, filename),
++        ...(filename === 'en.json' ? {} : customEnglishLocaleData),
+       };
+       const locale = filename.split('.')[0];
+ 
+diff --git a/spec/locales/custom_locale_spec.rb b/spec/locales/custom_locale_spec.rb
+index 366c7c5a74..ceea9a42c9 100644
+--- a/spec/locales/custom_locale_spec.rb
++++ b/spec/locales/custom_locale_spec.rb
+@@ -5,6 +5,7 @@ require 'rails_helper'
+ RSpec.describe 'Custom locale overrides' do # rubocop:disable RSpec/DescribeClass
+   let(:custom_locale_dir) { Rails.root.join('config', 'locales', 'custom') }
+   let(:custom_en_locale_file) { custom_locale_dir.join('custom_locale_spec.en.yml') }
++  let(:custom_ko_locale_file) { custom_locale_dir.join('custom_locale_spec.ko.yml') }
+   let(:custom_unsupported_locale_file) { custom_locale_dir.join('custom_locale_spec.zz.yml') }
+ 
+   around do |example|
+@@ -17,9 +18,18 @@ RSpec.describe 'Custom locale overrides' do # rubocop:disable RSpec/DescribeClas
+     FileUtils.mkdir_p(custom_locale_dir)
+     custom_en_locale_file.write(<<~YAML)
+       en:
++        admin:
++          custom_emojis:
++            copy: Custom emoji copy
+         auth:
+           login: Custom login
+     YAML
++    custom_ko_locale_file.write(<<~YAML)
++      ko:
++        admin:
++          custom_emojis:
++            copy: Custom Korean emoji copy
++    YAML
+     custom_unsupported_locale_file.write(<<~YAML)
+       zz:
+         auth:
+@@ -27,6 +37,7 @@ RSpec.describe 'Custom locale overrides' do # rubocop:disable RSpec/DescribeClas
+     YAML
+ 
+     Rails.application.config.i18n.load_path.unshift(custom_en_locale_file.to_s)
++    Rails.application.config.i18n.load_path.unshift(custom_ko_locale_file.to_s)
+     Rails.application.config.i18n.load_path.unshift(custom_unsupported_locale_file.to_s)
+ 
+     load Rails.root.join('config', 'initializers', 'i18n.rb')
+@@ -36,6 +47,7 @@ RSpec.describe 'Custom locale overrides' do # rubocop:disable RSpec/DescribeClas
+     example.run
+   ensure
+     custom_en_locale_file.delete if custom_en_locale_file.exist?
++    custom_ko_locale_file.delete if custom_ko_locale_file.exist?
+     custom_unsupported_locale_file.delete if custom_unsupported_locale_file.exist?
+     custom_locale_dir.rmdir if !custom_locale_dir_existed && custom_locale_dir.exist? && custom_locale_dir.children.empty?
+ 
+@@ -49,13 +61,25 @@ RSpec.describe 'Custom locale overrides' do # rubocop:disable RSpec/DescribeClas
+   end
+ 
+   it 'loads custom locale files after upstream locale files' do
+-    custom_paths = [custom_en_locale_file, custom_unsupported_locale_file].map(&:to_s).sort
++    custom_paths = Mastodon::CustomLocaleOverrides.paths
+ 
+-    expect(I18n.load_path.last(2)).to eq(custom_paths)
++    expect(I18n.load_path.last(custom_paths.size)).to eq(custom_paths)
+   end
+ 
+   it 'allows custom files to override existing upstream locale keys' do
+-    expect(I18n.t('auth.login', locale: :en)).to eq('Custom login')
++    expect(I18n.t('admin.custom_emojis.copy', locale: :en)).to eq('Custom emoji copy')
++  end
++
++  it 'applies custom English locale keys over upstream locale keys' do
++    expect(I18n.t('admin.custom_emojis.copy', locale: :de)).to eq('Custom emoji copy')
++  end
++
++  it 'applies custom English locale keys over custom locale keys' do
++    expect(I18n.t('admin.custom_emojis.copy', locale: :ko)).to eq('Custom emoji copy')
++  end
++
++  it 'does not depend on I18n fallback to use custom English locale keys' do
++    expect(I18n.t('admin.custom_emojis.copy', locale: :ja, fallback: false, default: 'Copy')).to eq('Custom emoji copy')
+   end
+ 
+   it 'does not add unsupported custom locale codes to available locales' do
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Wed, 27 May 2026 23:42:48 +0900
+Subject: [PATCH 3/3] Prioritise language-specific custom locale overrides
+
+- Adjust merge order in TypeScript to favour language-specific strings
+- Update Ruby backend logic to apply localised overrides after English defaults
+- Ensure service worker assets reflect new precedence hierarchy
+- Expand test suite to verify correct resolution of custom translations
+
+Rationale: Reversing the override hierarchy prevents generic English customisations from inadvertently overwriting specific translations, ensuring that language-specific adjustments are correctly respected.
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+
+diff --git a/app/javascript/mastodon/locales/load_locale.test.ts b/app/javascript/mastodon/locales/load_locale.test.ts
+index cf582c92bc..d3126217d7 100644
+--- a/app/javascript/mastodon/locales/load_locale.test.ts
++++ b/app/javascript/mastodon/locales/load_locale.test.ts
+@@ -64,7 +64,7 @@ describe('loadLocaleMessages', () => {
+     });
+   });
+ 
+-  test('applies custom english messages over other custom locales', async () => {
++  test('applies locale-specific custom messages over custom english messages', async () => {
+     const upstreamLocales: LocaleFileMap = {
+       './ko.json': localeFile({
+         'navigation_bar.home': '홈',
+@@ -84,7 +84,7 @@ describe('loadLocaleMessages', () => {
+     await expect(
+       loadLocaleMessages('ko', upstreamLocales, customLocales),
+     ).resolves.toEqual({
+-      'navigation_bar.home': 'Custom home',
++      'navigation_bar.home': '커스텀 홈',
+       'navigation_bar.profile': '커스텀 프로필',
+     });
+   });
+diff --git a/app/javascript/mastodon/locales/load_locale.ts b/app/javascript/mastodon/locales/load_locale.ts
+index 0a24635752..99d95f8716 100644
+--- a/app/javascript/mastodon/locales/load_locale.ts
++++ b/app/javascript/mastodon/locales/load_locale.ts
+@@ -50,8 +50,8 @@ export async function loadLocaleMessages(
+ 
+   return {
+     ...upstreamLocaleData,
+-    ...customLocaleData,
+     ...customEnglishLocaleData,
++    ...customLocaleData,
+   };
+ }
+ 
+diff --git a/app/javascript/mastodon/locales/service_worker_locale.test.ts b/app/javascript/mastodon/locales/service_worker_locale.test.ts
+index c4188cb982..5598e31a8b 100644
+--- a/app/javascript/mastodon/locales/service_worker_locale.test.ts
++++ b/app/javascript/mastodon/locales/service_worker_locale.test.ts
+@@ -54,7 +54,7 @@ describe('loadServiceWorkerLocales', () => {
+     });
+   });
+ 
+-  test('applies custom english messages over other service-worker locales', () => {
++  test('applies locale-specific custom messages over custom english service-worker messages', () => {
+     fs.writeFileSync(
+       path.join(localesPath, 'en.json'),
+       JSON.stringify({
+@@ -90,7 +90,7 @@ describe('loadServiceWorkerLocales', () => {
+         'notification.mention': 'Custom mention',
+       },
+       ko: {
+-        'notification.follow': 'Custom follow',
++        'notification.follow': 'Custom Korean follow',
+         'notification.mention': 'Custom mention',
+       },
+     });
+diff --git a/config/initializers/i18n.rb b/config/initializers/i18n.rb
+index 528ffebdbe..490fe8783b 100644
+--- a/config/initializers/i18n.rb
++++ b/config/initializers/i18n.rb
+@@ -24,6 +24,7 @@ module Mastodon::CustomLocaleOverrides
+       overrides = english_overrides
+       return if overrides.empty?
+ 
++      localized_overrides = non_english_overrides
+       translations = backend.translations
+ 
+       I18n.available_locales.each do |locale|
+@@ -31,6 +32,7 @@ module Mastodon::CustomLocaleOverrides
+         next if locale == :en || !translations.key?(locale)
+ 
+         overrides.each { |key, value| set_key!(translations[locale], key, value) }
++        localized_overrides.fetch(locale, {}).each { |key, value| set_key!(translations[locale], key, value) }
+       end
+     end
+ 
+@@ -44,6 +46,16 @@ module Mastodon::CustomLocaleOverrides
+       end
+     end
+ 
++    def non_english_overrides
++      paths.each_with_object(Hash.new { |hash, key| hash[key] = {} }) do |path, overrides|
++        load_locale_file(path).except(:en).each do |locale, translations|
++          flatten_translations(translations).each do |key, value|
++            overrides[locale.to_sym][key] = value
++          end
++        end
++      end
++    end
++
+     def load_locale_file(path)
+       backend = I18n::Backend::Simple.new
+       backend.load_translations(path)
+diff --git a/config/vite/plugin-sw-locales.ts b/config/vite/plugin-sw-locales.ts
+index 3df427af3a..9885970768 100644
+--- a/config/vite/plugin-sw-locales.ts
++++ b/config/vite/plugin-sw-locales.ts
+@@ -25,6 +25,7 @@ const CUSTOM_TRANSLATIONS = {
+ 
+ const KEEP_KEYS = [
+   'notification.favourite',
++  'notification.reaction',
+   'notification.follow',
+   'notification.follow_request',
+   'notification.mention',
+@@ -90,8 +91,8 @@ export function loadServiceWorkerLocales(
+     .forEach((filename) => {
+       const full = {
+         ...readLocaleFile(path.resolve(localesPath, filename)),
+-        ...readCustomLocaleFiles(customLocalesPath, filename),
+         ...(filename === 'en.json' ? {} : customEnglishLocaleData),
++        ...readCustomLocaleFiles(customLocalesPath, filename),
+       };
+       const locale = filename.split('.')[0];
+ 
+diff --git a/spec/locales/custom_locale_spec.rb b/spec/locales/custom_locale_spec.rb
+index ceea9a42c9..ab096ffd68 100644
+--- a/spec/locales/custom_locale_spec.rb
++++ b/spec/locales/custom_locale_spec.rb
+@@ -74,8 +74,8 @@ RSpec.describe 'Custom locale overrides' do # rubocop:disable RSpec/DescribeClas
+     expect(I18n.t('admin.custom_emojis.copy', locale: :de)).to eq('Custom emoji copy')
+   end
+ 
+-  it 'applies custom English locale keys over custom locale keys' do
+-    expect(I18n.t('admin.custom_emojis.copy', locale: :ko)).to eq('Custom emoji copy')
++  it 'applies locale-specific custom keys over custom English locale keys' do
++    expect(I18n.t('admin.custom_emojis.copy', locale: :ko)).to eq('Custom Korean emoji copy')
+   end
+ 
+   it 'does not depend on I18n fallback to use custom English locale keys' do

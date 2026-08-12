@@ -1,0 +1,160 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Tue, 26 May 2026 21:45:55 +0900
+Subject: [PATCH] Refactor emoji styling for custom aspect ratios
+
+- Replace hardcoded dimensions with --emoji-size CSS variable
+- Set width to auto and add min-width to prevent distortion
+- Apply object-fit: contain to ensure full image visibility
+- Decouple autosuggest styles for avatars and emojis
+- Update emoji picker overrides for visual consistency
+
+Rationale: Rectangular custom emojis previously suffered from improper scaling and distortion; this update standardises sizing and rendering logic to ensure consistent proportions across the interface.
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+
+diff --git a/app/javascript/styles/mastodon/components.scss b/app/javascript/styles/mastodon/components.scss
+index 57bd22007e..21c4afc586 100644
+--- a/app/javascript/styles/mastodon/components.scss
++++ b/app/javascript/styles/mastodon/components.scss
+@@ -616,14 +616,22 @@
+   }
+ }
+ 
+-.autosuggest-account .account__avatar,
+-.autosuggest-emoji img {
++.autosuggest-account .account__avatar {
+   display: block;
+   width: 24px;
+   height: 24px;
+   flex: 0 0 auto;
+ }
+ 
++.autosuggest-emoji img {
++  display: block;
++  width: auto;
++  min-width: 24px;
++  height: 24px;
++  flex: 0 0 auto;
++  object-fit: contain;
++}
++
+ .compose-form {
+   display: flex;
+   flex-direction: column;
+@@ -1125,12 +1133,15 @@
+ }
+ 
+ .emojione {
++  --emoji-size: 16px;
++
+   font-size: inherit;
+   vertical-align: middle;
+   object-fit: contain;
+   margin: -0.2ex 0.15em 0.2ex;
+-  width: 16px;
+-  height: 16px;
++  width: auto;
++  min-width: var(--emoji-size);
++  height: var(--emoji-size);
+ 
+   img {
+     width: auto;
+@@ -1171,8 +1182,8 @@
+   }
+ 
+   .emojione {
+-    width: 20px;
+-    height: 20px;
++    --emoji-size: 20px;
++
+     margin: -3px 0 0;
+   }
+ 
+@@ -1383,8 +1394,8 @@
+ .edit-indicator__content,
+ .reply-indicator__content {
+   .emojione {
+-    width: 18px;
+-    height: 18px;
++    --emoji-size: 18px;
++
+     margin: -3px 0 0;
+   }
+ }
+@@ -1394,8 +1405,8 @@
+   overflow-y: auto;
+ 
+   .emojione {
+-    width: 20px;
+-    height: 20px;
++    --emoji-size: 20px;
++
+     margin: -3px 0 0;
+   }
+ 
+@@ -1821,8 +1832,8 @@
+     line-height: 24px;
+ 
+     .emojione {
+-      width: 24px;
+-      height: 24px;
++      --emoji-size: 24px;
++
+       margin: -1px 0 0;
+     }
+   }
+@@ -7150,8 +7161,8 @@ a.status-card {
+     line-height: 24px;
+ 
+     .emojione {
+-      width: 24px;
+-      height: 24px;
++      --emoji-size: 24px;
++
+       margin: -1px 0 0;
+     }
+ 
+@@ -8482,8 +8493,7 @@ noscript {
+       margin-bottom: 16px;
+ 
+       .emojione {
+-        width: 22px;
+-        height: 22px;
++        --emoji-size: 22px;
+       }
+ 
+       h1 {
+diff --git a/app/javascript/styles/mastodon/emoji_picker.scss b/app/javascript/styles/mastodon/emoji_picker.scss
+index 716c790e65..73abd0c9cc 100644
+--- a/app/javascript/styles/mastodon/emoji_picker.scss
++++ b/app/javascript/styles/mastodon/emoji_picker.scss
+@@ -221,6 +221,14 @@
+     width: 22px;
+     height: 22px;
+   }
++
++  &.emoji-mart-emoji-custom img {
++    display: block;
++    width: auto !important;
++    min-width: 22px;
++    height: 22px !important;
++    object-fit: contain;
++  }
+ }
+ 
+ .emoji-mart-no-results {
+diff --git a/app/javascript/styles/mastodon/tables.scss b/app/javascript/styles/mastodon/tables.scss
+index e82f2b551c..8cb223f449 100644
+--- a/app/javascript/styles/mastodon/tables.scss
++++ b/app/javascript/styles/mastodon/tables.scss
+@@ -314,8 +314,7 @@ a.table-action-link {
+         margin-inline-end: 10px;
+ 
+         .emojione {
+-          width: 32px;
+-          height: 32px;
++          --emoji-size: 32px;
+         }
+       }
+ 

@@ -1,0 +1,141 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Mon, 25 May 2026 12:41:06 +0900
+Subject: [PATCH] Remove server hero image component
+
+- Delete the ServerHeroImage component entirely
+- Remove hero image usage from the ServerBanner
+- Strip the hero image from the About page header
+- Clean up redundant CSS rules and imports
+
+Rationale: Streamlining the user interface by removing the hero image simplifies the layout and moves the server banner and About page towards a cleaner, text-focused design.
+
+diff --git a/app/javascript/mastodon/components/server_banner.jsx b/app/javascript/mastodon/components/server_banner.jsx
+index 989ac7f006..d588c76efd 100644
+--- a/app/javascript/mastodon/components/server_banner.jsx
++++ b/app/javascript/mastodon/components/server_banner.jsx
+@@ -3,13 +3,10 @@ import { PureComponent } from 'react';
+ 
+ import { FormattedMessage, defineMessages, injectIntl } from 'react-intl';
+ 
+-import { Link } from 'react-router-dom';
+-
+ import { connect } from 'react-redux';
+ 
+ import { fetchServer } from 'mastodon/actions/server';
+ import { Account } from 'mastodon/components/account';
+-import { ServerHeroImage } from 'mastodon/components/server_hero_image';
+ import { ShortNumber } from 'mastodon/components/short_number';
+ import { Skeleton } from 'mastodon/components/skeleton';
+ import { domain } from 'mastodon/initial_state';
+@@ -45,10 +42,6 @@ class ServerBanner extends PureComponent {
+           <FormattedMessage id='server_banner.is_one_of_many' defaultMessage='{domain} is one of the many independent Mastodon servers you can use to participate in the fediverse.' values={{ domain: <strong>{domain}</strong>, mastodon: <a href='https://joinmastodon.org' target='_blank' rel='noopener'>Mastodon</a> }} />
+         </div>
+ 
+-        <Link to='/about'>
+-          <ServerHeroImage blurhash={server.getIn(['thumbnail', 'blurhash'])} src={server.getIn(['thumbnail', 'url'])} className='server-banner__hero' />
+-        </Link>
+-
+         <div className='server-banner__description'>
+           {isLoading ? (
+             <>
+diff --git a/app/javascript/mastodon/components/server_hero_image.tsx b/app/javascript/mastodon/components/server_hero_image.tsx
+deleted file mode 100644
+index 68b7f03df3..0000000000
+--- a/app/javascript/mastodon/components/server_hero_image.tsx
++++ /dev/null
+@@ -1,35 +0,0 @@
+-import { useCallback, useState } from 'react';
+-
+-import classNames from 'classnames';
+-
+-import { Blurhash } from './blurhash';
+-
+-interface Props {
+-  src: string;
+-  srcSet?: string;
+-  blurhash?: string;
+-  className?: string;
+-}
+-
+-export const ServerHeroImage: React.FC<Props> = ({
+-  src,
+-  srcSet,
+-  blurhash,
+-  className,
+-}) => {
+-  const [loaded, setLoaded] = useState(false);
+-
+-  const handleLoad = useCallback(() => {
+-    setLoaded(true);
+-  }, [setLoaded]);
+-
+-  return (
+-    <div
+-      className={classNames('image', { loaded }, className)}
+-      role='presentation'
+-    >
+-      {blurhash && <Blurhash hash={blurhash} className='image__preview' />}
+-      <img src={src} srcSet={srcSet} alt='' onLoad={handleLoad} />
+-    </div>
+-  );
+-};
+diff --git a/app/javascript/mastodon/features/about/index.jsx b/app/javascript/mastodon/features/about/index.jsx
+index 27f03b17cb..3e51d2c8df 100644
+--- a/app/javascript/mastodon/features/about/index.jsx
++++ b/app/javascript/mastodon/features/about/index.jsx
+@@ -11,7 +11,6 @@ import { connect } from 'react-redux';
+ import { fetchServer, fetchExtendedDescription, fetchDomainBlocks  } from 'mastodon/actions/server';
+ import { Account } from 'mastodon/components/account';
+ import Column from 'mastodon/components/column';
+-import { ServerHeroImage } from 'mastodon/components/server_hero_image';
+ import { Skeleton } from 'mastodon/components/skeleton';
+ import { LinkFooter} from 'mastodon/features/ui/components/link_footer';
+ 
+@@ -81,7 +80,6 @@ class About extends PureComponent {
+       <Column bindToDocument={!multiColumn} label={intl.formatMessage(messages.title)}>
+         <div className='scrollable about'>
+           <div className='about__header'>
+-            <ServerHeroImage blurhash={server.getIn(['thumbnail', 'blurhash'])} src={server.getIn(['thumbnail', 'url'])} srcSet={server.getIn(['thumbnail', 'versions'])?.map((value, key) => `${value} ${key.replace('@', '')}`).join(', ')} className='about__header__hero' />
+             <h1>{isLoading ? <Skeleton width='10ch' /> : server.get('domain')}</h1>
+             <p><FormattedMessage id='about.powered_by' defaultMessage='Decentralized social media powered by {mastodon}' values={{ mastodon: <a href='https://joinmastodon.org' className='about__mail' target='_blank' rel='noopener'>Mastodon</a> }} /></p>
+           </div>
+diff --git a/app/javascript/styles/mastodon/components.scss b/app/javascript/styles/mastodon/components.scss
+index 57bd22007e..fcda8e8957 100644
+--- a/app/javascript/styles/mastodon/components.scss
++++ b/app/javascript/styles/mastodon/components.scss
+@@ -9548,18 +9548,6 @@ noscript {
+     }
+   }
+ 
+-  &__hero {
+-    display: block;
+-    border-radius: 4px;
+-    width: 100%;
+-    height: auto;
+-    margin-bottom: 20px;
+-    aspect-ratio: 1.9;
+-    border: 0;
+-    background: $ui-base-color;
+-    object-fit: cover;
+-  }
+-
+   &__description {
+     font-size: 15px;
+     line-height: 22px;
+@@ -10203,15 +10191,6 @@ noscript {
+   &__header {
+     margin-bottom: 30px;
+ 
+-    &__hero {
+-      width: 100%;
+-      height: auto;
+-      aspect-ratio: 1.9;
+-      background: lighten($ui-base-color, 4%);
+-      border-radius: 8px;
+-      margin-bottom: 30px;
+-    }
+-
+     h1,
+     p {
+       text-align: center;

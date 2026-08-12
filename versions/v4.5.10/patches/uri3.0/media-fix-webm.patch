@@ -1,0 +1,98 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Mon, 25 May 2026 17:22:23 +0900
+Subject: [PATCH] Allow WebM files to bypass content type detection
+
+- Implement UploadedFileAdapterExtensions for Paperclip
+- Permit audio/webm and video/webm MIME types explicitly
+- Register the extension module in application configuration
+- Add regression tests to verify AV1-encoded WebM handling
+
+Rationale: Newer WebM codecs were causing incorrect MIME type identification during file uploads; this change prevents Paperclip from stripping or misidentifying these types, ensuring consistent media processing.
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+
+diff --git a/config/application.rb b/config/application.rb
+index 90cfe47428..a0239b8fb9 100644
+--- a/config/application.rb
++++ b/config/application.rb
+@@ -28,6 +28,7 @@ require_relative '../lib/paperclip/url_generator_extensions'
+ require_relative '../lib/paperclip/attachment_extensions'
+ 
+ require_relative '../lib/paperclip/gif_transcoder'
++require_relative '../lib/paperclip/uploaded_file_adapter_extensions'
+ require_relative '../lib/paperclip/media_type_spoof_detector_extensions'
+ require_relative '../lib/paperclip/transcoder'
+ require_relative '../lib/paperclip/type_corrector'
+diff --git a/lib/paperclip/uploaded_file_adapter_extensions.rb b/lib/paperclip/uploaded_file_adapter_extensions.rb
+new file mode 100644
+index 0000000000..49fb36af40
+--- /dev/null
++++ b/lib/paperclip/uploaded_file_adapter_extensions.rb
+@@ -0,0 +1,18 @@
++# frozen_string_literal: true
++
++module Paperclip
++  module UploadedFileAdapterExtensions
++    WEBM_MIME_TYPES = %w(audio/webm video/webm).freeze
++
++    private
++
++    def determine_content_type
++      content_type = @target.content_type.to_s.strip
++      return content_type if WEBM_MIME_TYPES.include?(content_type)
++
++      super
++    end
++  end
++end
++
++Paperclip::UploadedFileAdapter.prepend(Paperclip::UploadedFileAdapterExtensions)
+diff --git a/spec/models/media_attachment_spec.rb b/spec/models/media_attachment_spec.rb
+index a712cdde1d..4d1950a6d7 100644
+--- a/spec/models/media_attachment_spec.rb
++++ b/spec/models/media_attachment_spec.rb
+@@ -257,6 +257,20 @@ RSpec.describe MediaAttachment, :attachment_processing do
+     end
+   end
+ 
++  describe 'AV1 WebM uploads' do
++    it 'preserves the supplied video/webm content type' do
++      with_generated_av1_webm do |path|
++        media = described_class.new(account: Fabricate.build(:account), delay_processing: true)
++        media.file = uploaded_webm(path, 'video/webm', 'sample.webm')
++
++        expect(media).to be_valid
++        expect(media.type).to eq('video')
++        expect(media.file_content_type).to eq('video/webm')
++        expect(media.file_file_name).to end_with('.webm')
++      end
++    end
++  end
++
+   it { is_expected.to validate_presence_of(:file) }
+ 
+   describe 'size limit validation' do
+@@ -324,4 +338,22 @@ RSpec.describe MediaAttachment, :attachment_processing do
+   def media_metadata
+     media.file.meta.deep_symbolize_keys
+   end
++
++  def with_generated_av1_webm
++    tempfile = Tempfile.new(['webm-upload', '.webm'])
++    tempfile.binmode
++    tempfile.close
++
++    Terrapin::CommandLine
++      .new(Rails.configuration.x.ffmpeg_binary, '-f lavfi -i :video_source -f lavfi -i :audio_source -t 1 -c:v libaom-av1 -cpu-used 8 -crf 40 -c:a libopus -f webm -loglevel fatal -y :destination')
++      .run(video_source: 'testsrc=size=32x32:rate=1:duration=1', audio_source: 'sine=frequency=440:duration=1', destination: tempfile.path)
++
++    yield tempfile.path
++  ensure
++    tempfile&.unlink
++  end
++
++  def uploaded_webm(path, content_type, original_filename)
++    Rack::Test::UploadedFile.new(path, content_type, true, original_filename: original_filename)
++  end
+ end

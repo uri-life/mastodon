@@ -1,0 +1,735 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Wed, 12 Aug 2026 23:26:52 +0900
+Subject: [PATCH] Round interface controls and media surfaces
+
+- Increase radii across controls, panels, forms and menus
+- Make avatars circular and refine compact button hit areas
+- Create seamless, full-width media galleries and video layouts
+- Tighten composer uploads and improve visualiser contrast
+- Standardise modal, notice and expandable panel corners
+
+Rationale: Establishes a cohesive rounded visual language while improving media presentation and touch-friendly interaction areas. These layout-focused refinements enhance usability without changing application behaviour.
+
+diff --git a/app/javascript/styles/mastodon/_mixins.scss b/app/javascript/styles/mastodon/_mixins.scss
+index d66fa40581..76e7ead598 100644
+--- a/app/javascript/styles/mastodon/_mixins.scss
++++ b/app/javascript/styles/mastodon/_mixins.scss
+@@ -9,7 +9,7 @@
+   font-family: inherit;
+   background: var(--input-background-color);
+   color: $darker-text-color;
+-  border-radius: 4px;
++  border-radius: 23px;
+   border: 1px solid var(--background-border-color);
+   font-size: 17px;
+   line-height: normal;
+@@ -18,7 +18,7 @@
+ 
+ @mixin search-popout {
+   background: $simple-background-color;
+-  border-radius: 4px;
++  border-radius: 23px;
+   padding: 10px 14px;
+   padding-bottom: 14px;
+   margin-top: 10px;
+diff --git a/app/javascript/styles/mastodon/accounts.scss b/app/javascript/styles/mastodon/accounts.scss
+index da4b9bdaa8..0f2c200e65 100644
+--- a/app/javascript/styles/mastodon/accounts.scss
++++ b/app/javascript/styles/mastodon/accounts.scss
+@@ -221,7 +221,7 @@
+   letter-spacing: 0.5px;
+   line-height: 16px;
+   gap: 4px;
+-  border-radius: 6px;
++  border-radius: 14px;
+   align-items: center;
+ 
+   svg {
+diff --git a/app/javascript/styles/mastodon/admin.scss b/app/javascript/styles/mastodon/admin.scss
+index 6c5e5b1c9d..b0d7ddffd0 100644
+--- a/app/javascript/styles/mastodon/admin.scss
++++ b/app/javascript/styles/mastodon/admin.scss
+@@ -227,7 +227,7 @@ $content-width: 840px;
+           display: inline-flex;
+           align-items: center;
+           padding: 7px 10px;
+-          border-radius: 4px;
++          border-radius: 16px;
+           color: $darker-text-color;
+           text-decoration: none;
+           font-weight: 500;
+diff --git a/app/javascript/styles/mastodon/components.scss b/app/javascript/styles/mastodon/components.scss
+index 2f80cae315..06d6a65ea4 100644
+--- a/app/javascript/styles/mastodon/components.scss
++++ b/app/javascript/styles/mastodon/components.scss
+@@ -86,7 +86,7 @@
+ .button {
+   background-color: $ui-button-background-color;
+   border: 10px none;
+-  border-radius: 4px;
++  border-radius: 23px;
+   box-sizing: border-box;
+   color: $ui-button-color;
+   cursor: pointer;
+@@ -327,7 +327,7 @@
+   color: $action-button-color;
+   border: 0;
+   padding: 0;
+-  border-radius: 4px;
++  border-radius: 16px;
+   background: transparent;
+   cursor: pointer;
+   align-items: center;
+@@ -638,7 +638,7 @@
+     display: flex;
+     flex-direction: column;
+     flex: 0 1 auto;
+-    border-radius: 4px;
++    border-radius: 23px;
+     border: 1px solid var(--background-border-color);
+     transition: border-color 300ms linear;
+     position: relative;
+@@ -740,13 +740,13 @@
+   }
+ 
+   &__uploads {
+-    padding: 0 12px;
++    padding: 0;
+     aspect-ratio: 3/2;
+     flex-shrink: 0;
+   }
+ 
+   .media-gallery {
+-    gap: 8px;
++    gap: 0;
+   }
+ 
+   &__upload {
+@@ -790,6 +790,7 @@
+     }
+ 
+     &__visualizer {
++      background-color: black;
+       padding: 16px;
+       box-sizing: border-box;
+ 
+@@ -825,7 +826,7 @@
+       flex: 0 0 auto;
+       color: $white;
+       background: rgba(0, 0, 0, 75%);
+-      border-radius: 6px;
++      border-radius: 12px;
+       font-size: 12px;
+       line-height: 16px;
+       font-weight: 500;
+@@ -867,7 +868,7 @@
+     display: flex;
+     flex-direction: column;
+     gap: 12px;
+-    padding: 12px;
++    padding: 8px;
+   }
+ 
+   &__submit {
+@@ -876,6 +877,11 @@
+     flex: 1 1 auto;
+     max-width: 100%;
+     overflow: hidden;
++
++    > button {
++      border-radius: 15px;
++      min-height: 30px;
++    }
+   }
+ 
+   &__buttons {
+@@ -883,13 +889,17 @@
+     gap: 8px;
+     align-items: center;
+     flex: 1 1 auto;
++    margin-left: 3px;
++    margin-bottom: -0.5px;
+ 
+     & > div {
+       display: flex;
+     }
+ 
+     .icon-button {
+-      padding: 2px;
++      margin: -4px;
++      padding: 6px;
++      border-radius: 16px;
+     }
+ 
+     .icon-button .icon {
+@@ -1027,7 +1037,7 @@
+   gap: 4px;
+   background: transparent;
+   color: $highlight-text-color;
+-  border-radius: 6px;
++  border-radius: 15px;
+   border: 1px solid $highlight-text-color;
+   padding: 4px 8px;
+   font-size: 13px;
+@@ -1036,6 +1046,7 @@
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap;
++  min-height: 30px;
+ 
+   &[disabled] {
+     cursor: default;
+@@ -1585,6 +1596,15 @@
+     &:last-child {
+       flex-grow: 0;
+     }
++
++    > button {
++      margin: -4px;
++      padding: 4px;
++
++      &.icon-button--with-counter {
++        padding-inline-end: 8px;
++      }
++    }
+   }
+ 
+   &--first-in-thread {
+@@ -2140,7 +2160,7 @@
+   &__domain-pill {
+     display: inline-flex;
+     background: color.change($highlight-text-color, $alpha: 0.2);
+-    border-radius: 4px;
++    border-radius: 12px;
+     border: 0;
+     color: $highlight-text-color;
+     font-weight: 500;
+@@ -2160,7 +2180,7 @@
+       box-shadow: var(--dropdown-shadow);
+       max-width: 320px;
+       padding: 16px;
+-      border-radius: 8px;
++      border-radius: 23px;
+       display: flex;
+       flex-direction: column;
+       gap: 24px;
+@@ -2187,7 +2207,7 @@
+           display: flex;
+           align-items: center;
+           justify-content: center;
+-          border-radius: 50%;
++          border-radius: 7px;
+           flex-shrink: 0;
+         }
+ 
+@@ -2199,11 +2219,11 @@
+       }
+ 
+       &__handle {
+-        border: 2px dashed $highlight-text-color;
++        border: 2px solid $highlight-text-color;
+         background: color.change($highlight-text-color, $alpha: 0.1);
+         padding: 12px 8px;
+         color: $highlight-text-color;
+-        border-radius: 4px;
++        border-radius: 7px;
+ 
+         &__label {
+           font-size: 11px;
+@@ -2745,7 +2765,7 @@ a.account__display-name {
+     height: auto;
+     outline: 1px solid var(--media-outline-color);
+     outline-offset: -1px;
+-    border-radius: 8px;
++    border-radius: 0;
+     touch-action: none;
+   }
+ 
+@@ -3198,12 +3218,12 @@ a.account__display-name {
+   > .scrollable {
+     border: 1px solid var(--background-border-color);
+     border-top: 0;
+-    border-radius: 0 0 4px 4px;
++    border-radius: 0 0 23px 23px;
+ 
+     &.about,
+     &.privacy-policy {
+       border-top: 1px solid var(--background-border-color);
+-      border-radius: 4px;
++      border-radius: 23px;
+ 
+       @media screen and (max-width: $no-gap-breakpoint) {
+         border-top: 0;
+@@ -3780,7 +3800,7 @@ a.account__display-name {
+     padding-inline-end: 12px;
+     gap: 8px;
+     margin: 12px;
+-    border-radius: 6px;
++    border-radius: 20px;
+     font-size: 16px;
+     font-weight: 600;
+     line-height: 18px;
+@@ -3969,7 +3989,7 @@ a.account__display-name {
+   width: 100%;
+   background: transparent;
+   border: 1px solid var(--background-border-color);
+-  border-radius: 4px 4px 0 0;
++  border-radius: 23px 23px 0 0;
+   color: $highlight-text-color;
+   cursor: pointer;
+   flex: 0 0 auto;
+@@ -4677,7 +4697,7 @@ a.status-card {
+   display: flex;
+   font-size: 16px;
+   border: 1px solid var(--background-border-color);
+-  border-radius: 4px 4px 0 0;
++  border-radius: 23px 23px 0 0;
+   flex: 0 0 auto;
+   cursor: pointer;
+   position: relative;
+@@ -5621,7 +5641,7 @@ a.status-card {
+   backdrop-filter: $backdrop-blur-filter;
+   border: 1px solid var(--dropdown-border-color);
+   padding: 4px;
+-  border-radius: 4px;
++  border-radius: 23px;
+   overflow: hidden;
+   z-index: 2;
+ 
+@@ -5655,23 +5675,10 @@ a.status-card {
+   display: flex;
+   align-items: center;
+   gap: 12px;
+-  border-radius: 4px;
++  border-radius: 18px;
+   color: var(--dropdown-text-color);
+-
+-  // Make sure adjacent hover/active states don't have a meeting radius.
+-  &:hover + &:is(:focus, .active),
+-  &:is(:focus, .active) + &:hover,
+-  &:is(:focus, .active) + &:is(:focus, .active) {
+-    border-top-left-radius: 0;
+-    border-top-right-radius: 0;
+-  }
+-
+-  &:hover:has(+ :focus, .active),
+-  &:is(:focus, .active):has(+ :hover),
+-  &:is(:focus, .active):has(+ :is(:focus, .active)) {
+-    border-bottom-left-radius: 0;
+-    border-bottom-right-radius: 0;
+-  }
++  box-sizing: border-box;
++  min-height: 36px;
+ 
+   &:hover,
+   &:active {
+@@ -5783,7 +5790,7 @@ a.status-card {
+         letter-spacing: 0.25px;
+         font-weight: 500;
+         padding: 8px 12px;
+-        border-radius: 4px;
++        border-radius: 12px;
+         overflow: hidden;
+         white-space: nowrap;
+         text-overflow: ellipsis;
+@@ -5866,7 +5873,7 @@ a.status-card {
+     padding: 8px 12px;
+     width: 100%;
+     text-align: left;
+-    border-radius: 4px;
++    border-radius: 19px;
+     font-size: 14px;
+     height: 40px;
+ 
+@@ -5906,7 +5913,7 @@ a.status-card {
+     width: 100%;
+     background: var(--input-background-color);
+     border: 1px solid var(--background-border-color);
+-    border-radius: 0 0 4px 4px;
++    border-radius: 0 0 23px 23px;
+     box-shadow: var(--dropdown-shadow);
+     z-index: 99;
+     font-size: 13px;
+@@ -5995,7 +6002,7 @@ a.status-card {
+ 
+   &.active {
+     .search__input {
+-      border-radius: 4px 4px 0 0;
++      border-radius: 23px 23px 0 0;
+     }
+ 
+     .search__popout {
+@@ -6682,6 +6689,11 @@ a.status-card {
+       font-weight: 500;
+       letter-spacing: 0.15px;
+     }
++
++    > button {
++      margin: -4px;
++      padding: 4px;
++    }
+   }
+ 
+   &__content {
+@@ -7387,14 +7399,14 @@ a.status-card {
+   box-sizing: border-box;
+   margin-top: 8px;
+   overflow: hidden;
+-  border-radius: 8px;
++  border-radius: 22px;
+   position: relative;
+   width: 100%;
+   min-height: 64px;
+   display: grid;
+   grid-template-columns: 1fr 1fr;
+   grid-template-rows: 1fr 1fr;
+-  gap: 2px;
++  gap: 0;
+ 
+   &--layout-2 {
+     & > .media-gallery__item:nth-child(1) {
+@@ -7457,6 +7469,13 @@ a.status-card {
+       border-start-end-radius: 0;
+     }
+   }
++
++  .status &,
++  .detailed-status & {
++    margin-left: -16px;
++    margin-right: -16px;
++    width: calc(100% + 32px);
++  }
+ }
+ 
+ .media-gallery__item {
+@@ -7464,7 +7483,7 @@ a.status-card {
+   box-sizing: border-box;
+   display: block;
+   position: relative;
+-  border-radius: 8px;
++  border-radius: 22px;
+   overflow: hidden;
+   outline: 1px solid var(--media-outline-color);
+   outline-offset: -1px;
+@@ -7586,7 +7605,7 @@ a.status-card {
+   aspect-ratio: 16 / 9;
+   color: var(--player-foreground-color);
+   background: var(--player-background-color, var(--background-color));
+-  border-radius: 8px;
++  border-radius: 22px;
+   outline: 1px solid var(--media-outline-color);
+   outline-offset: -1px;
+ 
+@@ -7641,11 +7660,23 @@ a.status-card {
+     max-width: 200px;
+   }
+ 
++  .status &,
++  .detailed-status & {
++    margin-left: -16px;
++    margin-right: -16px;
++    width: calc(100% + 32px);
++  }
++
+   .video-player__seek {
+     position: absolute;
+     inset: 0 0 auto;
+     height: 24px;
+     z-index: 1; /* Ensure this renders on top of audio player controls */
++
++    .status &,
++    .detailed-status & {
++      inset: 0 24px auto;
++    }
+   }
+ 
+   &.inactive {
+@@ -7722,7 +7753,7 @@ a.status-card {
+   position: relative;
+   background: $base-shadow-color;
+   max-width: 100%;
+-  border-radius: 8px;
++  border-radius: 22px;
+   box-sizing: border-box;
+   color: $white;
+   display: flex;
+@@ -8074,6 +8105,14 @@ a.status-card {
+       }
+     }
+   }
++
++  .status &,
++  .detailed-status & {
++    margin-left: -16px;
++    margin-right: -16px;
++    width: calc(100% + 32px);
++    max-width: none;
++  }
+ }
+ 
+ .gifv {
+@@ -8608,7 +8647,7 @@ noscript {
+ 
+     .icon-button {
+       border: 1px solid var(--background-border-color);
+-      border-radius: 4px;
++      border-radius: 50%;
+       box-sizing: content-box;
+       padding: 5px;
+ 
+@@ -9178,6 +9217,11 @@ noscript {
+   .emoji-picker-dropdown {
+     display: flex;
+     margin: 2px;
++
++    > button {
++      margin: -4px 0;
++      padding: 4px;
++    }
+   }
+ 
+   &:hover .emoji-button {
+@@ -9212,6 +9256,12 @@ noscript {
+     .emoji-button {
+       padding: 0;
+     }
++
++    .emoji-picker-dropdown {
++      > button {
++        margin: -4px;
++      }
++    }
+   }
+ }
+ 
+@@ -9246,7 +9296,7 @@ noscript {
+   box-shadow: var(--dropdown-shadow);
+ 
+   &__footer {
+-    border-radius: 0 0 4px 4px;
++    border-radius: 0 0 23px 23px;
+     background: var(--modal-background-variant-color);
+     backdrop-filter: $backdrop-blur-filter;
+     border: 1px solid var(--modal-border-color);
+@@ -9254,10 +9304,15 @@ noscript {
+     padding: 12px;
+     display: flex;
+     justify-content: space-between;
++
++    > button {
++      margin: -4px;
++      padding: 4px 8px 4px 4px;
++    }
+   }
+ 
+   &__header {
+-    border-radius: 4px 4px 0 0;
++    border-radius: 23px 23px 0 0;
+     background: var(--modal-background-variant-color);
+     backdrop-filter: $backdrop-blur-filter;
+     border: 1px solid var(--modal-border-color);
+@@ -9304,7 +9359,7 @@ noscript {
+ }
+ 
+ .picture-in-picture-placeholder {
+-  border-radius: 8px;
++  border-radius: 22px;
+   box-sizing: border-box;
+   border: 1px dashed var(--background-border-color);
+   display: flex;
+@@ -9312,6 +9367,8 @@ noscript {
+   align-items: center;
+   justify-content: center;
+   margin-top: 16px;
++  margin-left: -16px;
++  margin-right: -16px;
+   font-size: 15px;
+   line-height: 21px;
+   font-weight: 500;
+@@ -9585,7 +9642,7 @@ noscript {
+ 
+   &__hero {
+     display: block;
+-    border-radius: 4px;
++    border-radius: 23px;
+     width: 100%;
+     height: auto;
+     margin-bottom: 20px;
+@@ -9658,7 +9715,7 @@ noscript {
+   overflow: visible;
+   position: relative;
+   display: block;
+-  border-radius: 16px;
++  border-radius: 23px;
+   background: var(--modal-background-color);
+   backdrop-filter: $backdrop-blur-filter;
+   border: 1px solid var(--modal-border-color);
+@@ -10134,6 +10191,11 @@ noscript {
+     .icon-button {
+       color: $highlight-text-color;
+     }
++
++    > button {
++      margin: -4px;
++      padding: 4px;
++    }
+   }
+ }
+ 
+@@ -10239,12 +10301,14 @@ noscript {
+     margin-bottom: 30px;
+ 
+     &__hero {
+-      width: 100%;
++      width: calc(100% + 40px);
+       height: auto;
+       aspect-ratio: 1.9;
+       background: lighten($ui-base-color, 4%);
+-      border-radius: 8px;
+       margin-bottom: 30px;
++      margin-top: -20px;
++      margin-left: -20px;
++      margin-right: -20px;
+     }
+ 
+     h1,
+@@ -10269,7 +10333,7 @@ noscript {
+ 
+   &__meta {
+     border: 1px solid var(--background-border-color);
+-    border-radius: 4px;
++    border-radius: 33px;
+     display: flex;
+     margin-bottom: 30px;
+     font-size: 15px;
+@@ -10391,7 +10455,7 @@ noscript {
+       font-weight: 600;
+       line-height: 22px;
+       padding: 20px;
+-      border-radius: 4px;
++      border-radius: 33px;
+       border: 1px solid var(--background-border-color);
+       color: $highlight-text-color;
+       cursor: pointer;
+@@ -10400,11 +10464,12 @@ noscript {
+     }
+ 
+     &.active &__title {
+-      border-radius: 4px 4px 0 0;
++      border-radius: 33px 33px 0 0;
+     }
+ 
+     &__body {
+       border: 1px solid var(--background-border-color);
++      border-radius: 0 0 33px 33px;
+       border-top: 0;
+       padding: 20px;
+       font-size: 15px;
+diff --git a/app/javascript/styles/mastodon/css_variables.scss b/app/javascript/styles/mastodon/css_variables.scss
+index 78915ae10e..110fb992b3 100644
+--- a/app/javascript/styles/mastodon/css_variables.scss
++++ b/app/javascript/styles/mastodon/css_variables.scss
+@@ -19,7 +19,7 @@
+   --surface-variant-active-background-color: #{lighten($ui-base-color, 4%)};
+   --surface-border-color: #{lighten($ui-base-color, 8%)};
+   --on-surface-color: #{color.adjust($ui-base-color, $alpha: -0.5)};
+-  --avatar-border-radius: 8px;
++  --avatar-border-radius: 50%;
+   --media-outline-color: #{rgba(#fcf8ff, 0.15)};
+   --overlay-icon-shadow: drop-shadow(
+     0 0 8px #{color.change($base-shadow-color, $alpha: 0.35)}
+diff --git a/app/javascript/styles/mastodon/emoji_picker.scss b/app/javascript/styles/mastodon/emoji_picker.scss
+index 716c790e65..75d431b9da 100644
+--- a/app/javascript/styles/mastodon/emoji_picker.scss
++++ b/app/javascript/styles/mastodon/emoji_picker.scss
+@@ -104,7 +104,7 @@
+     background: $ui-base-color;
+     color: $darker-text-color;
+     border: 1px solid var(--background-border-color);
+-    border-radius: 4px;
++    border-radius: 12px;
+ 
+     &::-moz-focus-inner {
+       border: 0;
+diff --git a/app/javascript/styles/mastodon/forms.scss b/app/javascript/styles/mastodon/forms.scss
+index e0ccd0a27f..dac54681be 100644
+--- a/app/javascript/styles/mastodon/forms.scss
++++ b/app/javascript/styles/mastodon/forms.scss
+@@ -15,7 +15,7 @@ code {
+ }
+ 
+ .form-section {
+-  border-radius: 8px;
++  border-radius: 23px;
+   background: var(--surface-background-color);
+   padding: 24px;
+   margin-bottom: 24px;
+@@ -397,7 +397,7 @@ code {
+       margin-bottom: 10px;
+       max-width: 100%;
+       height: auto;
+-      border-radius: var(--avatar-border-radius);
++      border-radius: 23px;
+       background: url('@/images/void.png');
+ 
+       &[src$='missing.png'] {
+@@ -527,7 +527,7 @@ code {
+     resize: vertical;
+     background: $ui-base-color;
+     border: 1px solid var(--background-border-color);
+-    border-radius: 4px;
++    border-radius: 23px;
+     padding: 10px 16px;
+ 
+     &:invalid {
+@@ -604,7 +604,7 @@ code {
+     display: block;
+     width: 100%;
+     border: 0;
+-    border-radius: 4px;
++    border-radius: 23px;
+     background: $ui-button-background-color;
+     color: $ui-button-color;
+     font-size: 15px;
+@@ -658,10 +658,10 @@ code {
+       url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14.933 18.467' height='19.698' width='15.929'><path d='M3.467 14.967l-3.393-3.5H14.86l-3.392 3.5c-1.866 1.925-3.666 3.5-4 3.5-.335 0-2.135-1.575-4-3.5zm.266-11.234L7.467 0 11.2 3.733l3.733 3.734H0l3.733-3.734z' fill='#{hex-color(lighten($ui-base-color, 12%))}'/></svg>")
+       no-repeat right 8px center / auto 14px;
+     border: 1px solid var(--background-border-color);
+-    border-radius: 4px;
+-    padding-inline-start: 10px;
++    border-radius: 21px;
++    padding-inline-start: 15px;
+     padding-inline-end: 30px;
+-    height: 41px;
++    height: 42px;
+ 
+     @media screen and (width <= 600px) {
+       font-size: 16px;
+@@ -732,8 +732,8 @@ code {
+   background: var(--background-color);
+   color: $highlight-text-color;
+   border: 1px solid $highlight-text-color;
+-  border-radius: 4px;
+-  padding: 15px 10px;
++  border-radius: 25px;
++  padding: 15px;
+   margin-bottom: 30px;
+   text-align: center;
+ 
+@@ -1094,12 +1094,14 @@ code {
+ .input-copy {
+   background: darken($ui-base-color, 10%);
+   border: 1px solid darken($ui-base-color, 14%);
+-  border-radius: 4px;
++  border-radius: 24px;
+   display: flex;
+   align-items: center;
+   padding-inline-end: 4px;
+   position: relative;
+   top: 1px;
++  box-sizing: border-box;
++  min-height: 48px;
+   transition: border-color 300ms linear;
+ 
+   &__wrapper {

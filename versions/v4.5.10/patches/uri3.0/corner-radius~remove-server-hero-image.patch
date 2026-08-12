@@ -1,0 +1,47 @@
+diff --git a/app/javascript/styles/mastodon/components.scss b/app/javascript/styles/mastodon/components2.scss
+index 8e5e06b937..76baa38713 100644
+--- a/app/javascript/styles/mastodon/components.scss
++++ b/app/javascript/styles/mastodon/components.scss
+@@ -9786,21 +9786,6 @@ noscript {
+     }
+   }
+ 
+-<<<<<<< HEAD
+-=======
+-  &__hero {
+-    display: block;
+-    border-radius: 23px;
+-    width: 100%;
+-    height: auto;
+-    margin-bottom: 20px;
+-    aspect-ratio: 1.9;
+-    border: 0;
+-    background: $ui-base-color;
+-    object-fit: cover;
+-  }
+-
+->>>>>>> Round interface controls and media surfaces
+   &__description {
+     font-size: 15px;
+     line-height: 22px;
+@@ -10449,20 +10434,6 @@ noscript {
+   &__header {
+     margin-bottom: 30px;
+ 
+-<<<<<<< HEAD
+-=======
+-    &__hero {
+-      width: calc(100% + 40px);
+-      height: auto;
+-      aspect-ratio: 1.9;
+-      background: lighten($ui-base-color, 4%);
+-      margin-bottom: 30px;
+-      margin-top: -20px;
+-      margin-left: -20px;
+-      margin-right: -20px;
+-    }
+-
+->>>>>>> Round interface controls and media surfaces
+     h1,
+     p {
+       text-align: center;

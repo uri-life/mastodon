@@ -1,0 +1,915 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Sun, 24 May 2026 18:16:38 +0900
+Subject: [PATCH 1/2] Implement input mode selection in the compose form
+
+- Add input mode state management to the compose reducer
+- Create input mode constants and type-guard utilities
+- Introduce the InputModeDropdown component for mode selection
+- Integrate the dropdown into the main ComposeForm interface
+- Ensure input mode resets appropriately on form clearance
+
+Rationale: This change establishes the foundational infrastructure and UI required to support future post-formatting features, allowing users to toggle between different input states within the compose form.
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+
+diff --git a/app/javascript/mastodon/actions/compose.js b/app/javascript/mastodon/actions/compose.js
+index 6e39db4756..f598ce62ad 100644
+--- a/app/javascript/mastodon/actions/compose.js
++++ b/app/javascript/mastodon/actions/compose.js
+@@ -58,6 +58,7 @@ export const COMPOSE_SPOILERNESS_CHANGE  = 'COMPOSE_SPOILERNESS_CHANGE';
+ export const COMPOSE_SPOILER_TEXT_CHANGE = 'COMPOSE_SPOILER_TEXT_CHANGE';
+ export const COMPOSE_COMPOSING_CHANGE    = 'COMPOSE_COMPOSING_CHANGE';
+ export const COMPOSE_LANGUAGE_CHANGE     = 'COMPOSE_LANGUAGE_CHANGE';
++export const COMPOSE_INPUT_MODE_CHANGE   = 'COMPOSE_INPUT_MODE_CHANGE';
+ 
+ export const COMPOSE_EMOJI_INSERT = 'COMPOSE_EMOJI_INSERT';
+ 
+@@ -789,6 +790,11 @@ export const changeComposeLanguage = language => ({
+   language,
+ });
+ 
++export const changeComposeInputMode = inputMode => ({
++  type: COMPOSE_INPUT_MODE_CHANGE,
++  inputMode,
++});
++
+ export function changeComposeSpoilerness() {
+   return {
+     type: COMPOSE_SPOILERNESS_CHANGE,
+diff --git a/app/javascript/mastodon/features/compose/components/compose_form.jsx b/app/javascript/mastodon/features/compose/components/compose_form.jsx
+index 7f86f8fd84..d0f079d151 100644
+--- a/app/javascript/mastodon/features/compose/components/compose_form.jsx
++++ b/app/javascript/mastodon/features/compose/components/compose_form.jsx
+@@ -24,6 +24,7 @@ import { countableText } from '../util/counter';
+ import { CharacterCounter } from './character_counter';
+ import { EditIndicator } from './edit_indicator';
+ import { LanguageDropdown } from './language_dropdown';
++import { InputModeDropdown } from './input_mode_dropdown';
+ import { NavigationBar } from './navigation_bar';
+ import { PollForm } from "./poll_form";
+ import { ReplyIndicator } from './reply_indicator';
+@@ -263,6 +264,7 @@ class ComposeForm extends ImmutablePureComponent {
+ 
+           <div className='compose-form__dropdowns'>
+             <VisibilityButton disabled={this.props.isEditing} />
++            <InputModeDropdown />
+             <LanguageDropdown />
+           </div>
+ 
+diff --git a/app/javascript/mastodon/features/compose/components/input_mode_dropdown.tsx b/app/javascript/mastodon/features/compose/components/input_mode_dropdown.tsx
+new file mode 100644
+index 0000000000..c0cffc252b
+--- /dev/null
++++ b/app/javascript/mastodon/features/compose/components/input_mode_dropdown.tsx
+@@ -0,0 +1,142 @@
++import { useCallback, useMemo, useRef, useState } from 'react';
++
++import { defineMessages, useIntl } from 'react-intl';
++
++import classNames from 'classnames';
++
++import Overlay from 'react-overlays/Overlay';
++import type { Placement, State } from 'react-overlays/usePopper';
++
++import ArticleIcon from '@/material-icons/400-24px/article.svg?react';
++import { changeComposeInputMode } from 'mastodon/actions/compose';
++import type { SelectItem } from 'mastodon/components/dropdown_selector';
++import { DropdownSelector } from 'mastodon/components/dropdown_selector';
++import { Icon } from 'mastodon/components/icon';
++import { COMPOSE_INPUT_MODE_PLAIN } from 'mastodon/features/compose/input_modes';
++import type { ComposeInputMode } from 'mastodon/features/compose/input_modes';
++import { useAppDispatch, useAppSelector } from 'mastodon/store';
++
++const messages = defineMessages({
++  changeInputMode: {
++    id: 'compose.input_mode.change',
++    defaultMessage: 'Change input mode',
++  },
++  plain: {
++    id: 'compose.input_mode.plain',
++    defaultMessage: 'Plain text',
++  },
++  plainDescription: {
++    id: 'compose.input_mode.plain.description',
++    defaultMessage: 'Write your post as plain text',
++  },
++});
++
++export const InputModeDropdown: React.FC = () => {
++  const intl = useIntl();
++  const dispatch = useAppDispatch();
++  const [open, setOpen] = useState(false);
++  const [placement, setPlacement] = useState<Placement | undefined>('bottom');
++  const activeElementRef = useRef<HTMLElement | null>(null);
++  const targetRef = useRef<HTMLDivElement>(null);
++
++  const value = useAppSelector(
++    (state) => state.compose.get('input_mode') as string,
++  );
++
++  const options = useMemo<SelectItem<ComposeInputMode>[]>(
++    () => [
++      {
++        icon: 'article',
++        iconComponent: ArticleIcon,
++        value: COMPOSE_INPUT_MODE_PLAIN,
++        text: intl.formatMessage(messages.plain),
++        meta: intl.formatMessage(messages.plainDescription),
++      },
++    ],
++    [intl],
++  );
++
++  const current =
++    options.find((option) => option.value === value) ?? options[0];
++
++  const handleMouseDown = useCallback(() => {
++    if (!open && document.activeElement instanceof HTMLElement) {
++      activeElementRef.current = document.activeElement;
++    }
++  }, [open]);
++
++  const handleToggle = useCallback(() => {
++    if (open && activeElementRef.current) {
++      activeElementRef.current.focus({ preventScroll: true });
++    }
++
++    setOpen(!open);
++  }, [open]);
++
++  const handleClose = useCallback(() => {
++    if (open && activeElementRef.current) {
++      activeElementRef.current.focus({ preventScroll: true });
++    }
++
++    setOpen(false);
++  }, [open]);
++
++  const handleChange = useCallback(
++    (inputMode: string) => {
++      if (inputMode !== value) {
++        dispatch(changeComposeInputMode(inputMode));
++      }
++    },
++    [dispatch, value],
++  );
++
++  const handleOverlayEnter = useCallback((state: Partial<State>) => {
++    setPlacement(state.placement);
++  }, []);
++
++  if (!current) {
++    return null;
++  }
++
++  return (
++    <div ref={targetRef}>
++      <button
++        type='button'
++        title={intl.formatMessage(messages.changeInputMode)}
++        aria-expanded={open}
++        onClick={handleToggle}
++        onMouseDown={handleMouseDown}
++        className={classNames('dropdown-button', { active: open })}
++      >
++        {current.icon && current.iconComponent && (
++          <Icon id={current.icon} icon={current.iconComponent} />
++        )}
++        <span className='dropdown-button__label'>{current.text}</span>
++      </button>
++
++      <Overlay
++        show={open}
++        offset={[5, 5]}
++        placement={placement}
++        flip
++        target={targetRef}
++        popperConfig={{ strategy: 'fixed', onFirstUpdate: handleOverlayEnter }}
++      >
++        {({ props, placement }) => (
++          <div {...props}>
++            <div
++              className={`dropdown-animation privacy-dropdown__dropdown ${placement}`}
++            >
++              <DropdownSelector
++                items={options}
++                value={current.value}
++                onClose={handleClose}
++                onChange={handleChange}
++              />
++            </div>
++          </div>
++        )}
++      </Overlay>
++    </div>
++  );
++};
+diff --git a/app/javascript/mastodon/features/compose/input_modes.ts b/app/javascript/mastodon/features/compose/input_modes.ts
+new file mode 100644
+index 0000000000..b399703327
+--- /dev/null
++++ b/app/javascript/mastodon/features/compose/input_modes.ts
+@@ -0,0 +1,8 @@
++export const COMPOSE_INPUT_MODE_PLAIN = 'plain';
++
++export const COMPOSE_INPUT_MODE_OPTIONS = [COMPOSE_INPUT_MODE_PLAIN] as const;
++
++export type ComposeInputMode = (typeof COMPOSE_INPUT_MODE_OPTIONS)[number];
++
++export const isComposeInputMode = (value: string): value is ComposeInputMode =>
++  COMPOSE_INPUT_MODE_OPTIONS.includes(value as ComposeInputMode);
+diff --git a/app/javascript/mastodon/locales/custom/composer-mode/en.json b/app/javascript/mastodon/locales/custom/composer-mode/en.json
+new file mode 100644
+index 0000000000..7a5a9a0509
+--- /dev/null
++++ b/app/javascript/mastodon/locales/custom/composer-mode/en.json
+@@ -0,0 +1,5 @@
++{
++  "compose.input_mode.change": "Change input mode",
++  "compose.input_mode.plain": "Plain text",
++  "compose.input_mode.plain.description": "Write your post as plain text"
++}
+diff --git a/app/javascript/mastodon/locales/custom/composer-mode/ko.json b/app/javascript/mastodon/locales/custom/composer-mode/ko.json
+new file mode 100644
+index 0000000000..a1c48dc49f
+--- /dev/null
++++ b/app/javascript/mastodon/locales/custom/composer-mode/ko.json
+@@ -0,0 +1,5 @@
++{
++  "compose.input_mode.change": "입력 모드 변경",
++  "compose.input_mode.plain": "평문",
++  "compose.input_mode.plain.description": "게시물을 평문으로 작성합니다"
++}
+diff --git a/app/javascript/mastodon/reducers/compose.js b/app/javascript/mastodon/reducers/compose.js
+index 451bb94e26..6161891087 100644
+--- a/app/javascript/mastodon/reducers/compose.js
++++ b/app/javascript/mastodon/reducers/compose.js
+@@ -10,6 +10,10 @@ import {
+   cancelPasteLinkCompose,
+ } from '@/mastodon/actions/compose_typed';
+ import { timelineDelete } from 'mastodon/actions/timelines_typed';
++import {
++  COMPOSE_INPUT_MODE_PLAIN,
++  isComposeInputMode,
++} from 'mastodon/features/compose/input_modes';
+ 
+ import {
+   COMPOSE_MOUNT,
+@@ -42,6 +46,7 @@ import {
+   COMPOSE_SPOILERNESS_CHANGE,
+   COMPOSE_SPOILER_TEXT_CHANGE,
+   COMPOSE_LANGUAGE_CHANGE,
++  COMPOSE_INPUT_MODE_CHANGE,
+   COMPOSE_COMPOSING_CHANGE,
+   COMPOSE_EMOJI_INSERT,
+   COMPOSE_RESET,
+@@ -87,6 +92,7 @@ const initialState = ImmutableMap({
+   default_privacy: 'public',
+   default_sensitive: false,
+   default_language: 'en',
++  input_mode: COMPOSE_INPUT_MODE_PLAIN,
+   resetFileKey: Math.floor((Math.random() * 0x10000)),
+   idempotencyKey: null,
+   tagHistory: ImmutableList(),
+@@ -126,6 +132,7 @@ function clearAll(state) {
+     map.set('privacy', state.get('default_privacy'));
+     map.set('sensitive', state.get('default_sensitive'));
+     map.set('language', state.get('default_language'));
++    map.set('input_mode', COMPOSE_INPUT_MODE_PLAIN);
+     map.update('media_attachments', list => list.clear());
+     map.set('progress', 0);
+     map.set('poll', null);
+@@ -602,6 +609,12 @@ export const composeReducer = (state = initialState, action) => {
+     return state.update('poll', poll => poll.set('expires_in', action.expiresIn).set('multiple', action.isMultiple));
+   case COMPOSE_LANGUAGE_CHANGE:
+     return state.set('language', action.language);
++  case COMPOSE_INPUT_MODE_CHANGE:
++    return isComposeInputMode(action.inputMode) && action.inputMode !== state.get('input_mode') ?
++      state
++        .set('input_mode', action.inputMode)
++        .set('idempotencyKey', uuid()) :
++      state;
+   case COMPOSE_FOCUS:
+     return state.set('focusDate', new Date()).update('text', text => text.length > 0 ? text : action.defaultText);
+   case COMPOSE_CHANGE_MEDIA_ORDER:
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Sun, 24 May 2026 19:52:30 +0000
+Subject: [PATCH 2/2] Persist status content type in the database and API
+
+- Add content_type column to statuses and status_edits tables
+- Validate content types and provide effective_content_type defaults
+- Include content_type in status serialisation and API responses
+- Update compose logic to track and convert content type formats
+- Sync input mode state during status edits and redrafts
+
+Rationale: This ensures the platform can reliably store and retrieve the format of post content, providing the necessary data structure for future support of diverse media or rich text types while maintaining backward compatibility.
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+
+diff --git a/app/controllers/api/v1/statuses_controller.rb b/app/controllers/api/v1/statuses_controller.rb
+index 25f9dec252..d6df7c2e30 100644
+--- a/app/controllers/api/v1/statuses_controller.rb
++++ b/app/controllers/api/v1/statuses_controller.rb
+@@ -86,6 +86,7 @@ class Api::V1::StatusesController < Api::BaseController
+       quote_approval_policy: quote_approval_policy,
+       media_ids: status_params[:media_ids],
+       sensitive: status_params[:sensitive],
++      content_type: status_params[:content_type],
+       spoiler_text: status_params[:spoiler_text],
+       visibility: status_params[:visibility],
+       language: status_params[:language],
+@@ -116,6 +117,7 @@ class Api::V1::StatusesController < Api::BaseController
+       poll: status_params[:poll],
+     }
+ 
++    update_options[:content_type] = status_params[:content_type] if status_params.key?(:content_type)
+     update_options[:quote_approval_policy] = quote_approval_policy if status_params[:quote_approval_policy].present?
+ 
+     UpdateStatusService.new.call(@status, current_account.id, update_options)
+@@ -184,6 +186,7 @@ class Api::V1::StatusesController < Api::BaseController
+       :quoted_status_id,
+       :quote_approval_policy,
+       :sensitive,
++      :content_type,
+       :spoiler_text,
+       :visibility,
+       :language,
+diff --git a/app/javascript/mastodon/actions/compose.js b/app/javascript/mastodon/actions/compose.js
+index f598ce62ad..133f9467bb 100644
+--- a/app/javascript/mastodon/actions/compose.js
++++ b/app/javascript/mastodon/actions/compose.js
+@@ -5,6 +5,7 @@ import { throttle } from 'lodash';
+ 
+ import api from 'mastodon/api';
+ import { browserHistory } from 'mastodon/components/router';
++import { contentTypeFromComposeInputMode } from 'mastodon/features/compose/input_modes';
+ import { countableText } from 'mastodon/features/compose/util/counter';
+ import { search as emojiSearch } from 'mastodon/features/emoji/emoji_mart_search_light';
+ import { tagHistory } from 'mastodon/settings';
+@@ -98,7 +99,7 @@ export const ensureComposeIsVisible = (getState) => {
+   }
+ };
+ 
+-export function setComposeToStatus(status, text, spoiler_text) {
++export function setComposeToStatus(status, text, spoiler_text, content_type) {
+   return (dispatch, getState) => {
+     const maxOptions = getState().server.getIn(['server', 'configuration', 'polls', 'max_options']);
+ 
+@@ -107,6 +108,7 @@ export function setComposeToStatus(status, text, spoiler_text) {
+       status,
+       text,
+       spoiler_text,
++      content_type,
+       maxOptions,
+     });
+   }
+@@ -197,6 +199,7 @@ export function submitCompose(successCallback) {
+     const media    = getState().getIn(['compose', 'media_attachments']);
+     const statusId = getState().getIn(['compose', 'id'], null);
+     const hasQuote = !!getState().getIn(['compose', 'quoted_status_id']);
++    const content_type = contentTypeFromComposeInputMode(getState().getIn(['compose', 'input_mode']));
+     const spoiler_text = getState().getIn(['compose', 'spoiler']) ? getState().getIn(['compose', 'spoiler_text'], '') : '';
+ 
+     const fulltext = `${spoiler_text ?? ''}${countableText(status ?? '')}`;
+@@ -239,6 +242,7 @@ export function submitCompose(successCallback) {
+       method: statusId === null ? 'post' : 'put',
+       data: {
+         status,
++        content_type,
+         spoiler_text,
+         in_reply_to_id: getState().getIn(['compose', 'in_reply_to'], null),
+         media_ids: media.map(item => item.get('id')),
+diff --git a/app/javascript/mastodon/actions/statuses.js b/app/javascript/mastodon/actions/statuses.js
+index d714ed3849..032e3d25c2 100644
+--- a/app/javascript/mastodon/actions/statuses.js
++++ b/app/javascript/mastodon/actions/statuses.js
+@@ -109,7 +109,7 @@ export function fetchStatusFail(id, error, skipLoading, parentQuotePostId) {
+   };
+ }
+ 
+-export function redraft(status, raw_text, quoted_status_id = null) {
++export function redraft(status, raw_text, quoted_status_id = null, content_type = null) {
+   return (dispatch, getState) => {
+     const maxOptions = getState().server.getIn(['server', 'configuration', 'polls', 'max_options']);
+ 
+@@ -118,6 +118,7 @@ export function redraft(status, raw_text, quoted_status_id = null) {
+       status,
+       raw_text,
+       quoted_status_id,
++      content_type,
+       maxOptions,
+     });
+   };
+@@ -135,7 +136,7 @@ export const editStatus = (id) => (dispatch, getState) => {
+   api().get(`/api/v1/statuses/${id}/source`).then(response => {
+     dispatch(fetchStatusSourceSuccess());
+     ensureComposeIsVisible(getState);
+-    dispatch(setComposeToStatus(status, response.data.text, response.data.spoiler_text));
++    dispatch(setComposeToStatus(status, response.data.text, response.data.spoiler_text, response.data.content_type));
+   }).catch(error => {
+     dispatch(fetchStatusSourceFail(error));
+   });
+@@ -170,7 +171,7 @@ export function deleteStatus(id, withRedraft = false) {
+       dispatch(importFetchedAccount(response.data.account));
+ 
+       if (withRedraft) {
+-        dispatch(redraft(status, response.data.text, response.data.quote?.quoted_status?.id));
++        dispatch(redraft(status, response.data.text, response.data.quote?.quoted_status?.id, response.data.content_type));
+         ensureComposeIsVisible(getState);
+       } else {
+         dispatch(showAlert({ message: messages.deleteSuccess }));
+diff --git a/app/javascript/mastodon/api_types/statuses.ts b/app/javascript/mastodon/api_types/statuses.ts
+index 00418a13d2..6250332882 100644
+--- a/app/javascript/mastodon/api_types/statuses.ts
++++ b/app/javascript/mastodon/api_types/statuses.ts
+@@ -108,6 +108,7 @@ export interface ApiStatusJSON {
+   filtered?: ApiFilterResultJSON[];
+   content?: string;
+   text?: string;
++  content_type?: string;
+ 
+   reblog?: ApiStatusJSON;
+   application?: ApiStatusApplicationJSON;
+@@ -133,6 +134,7 @@ export interface ApiStatusSourceJSON {
+   id: string;
+   text: string;
+   spoiler_text: string;
++  content_type: string;
+ }
+ 
+ export function isStatusVisibility(
+diff --git a/app/javascript/mastodon/features/compose/input_modes.ts b/app/javascript/mastodon/features/compose/input_modes.ts
+index b399703327..1bae833ecf 100644
+--- a/app/javascript/mastodon/features/compose/input_modes.ts
++++ b/app/javascript/mastodon/features/compose/input_modes.ts
+@@ -4,5 +4,25 @@ export const COMPOSE_INPUT_MODE_OPTIONS = [COMPOSE_INPUT_MODE_PLAIN] as const;
+ 
+ export type ComposeInputMode = (typeof COMPOSE_INPUT_MODE_OPTIONS)[number];
+ 
++export type ComposeContentType = 'text/plain';
++
+ export const isComposeInputMode = (value: string): value is ComposeInputMode =>
+   COMPOSE_INPUT_MODE_OPTIONS.includes(value as ComposeInputMode);
++
++export const composeInputModeFromContentType = (
++  contentType?: string | null,
++): ComposeInputMode => {
++  switch (contentType) {
++    case 'text/plain':
++    default:
++      return COMPOSE_INPUT_MODE_PLAIN;
++  }
++};
++
++export const contentTypeFromComposeInputMode = (
++  inputMode: ComposeInputMode,
++): ComposeContentType | undefined => {
++  void inputMode;
++
++  return undefined;
++};
+diff --git a/app/javascript/mastodon/reducers/compose.js b/app/javascript/mastodon/reducers/compose.js
+index 6161891087..101c4996bf 100644
+--- a/app/javascript/mastodon/reducers/compose.js
++++ b/app/javascript/mastodon/reducers/compose.js
+@@ -12,6 +12,7 @@ import {
+ import { timelineDelete } from 'mastodon/actions/timelines_typed';
+ import {
+   COMPOSE_INPUT_MODE_PLAIN,
++  composeInputModeFromContentType,
+   isComposeInputMode,
+ } from 'mastodon/features/compose/input_modes';
+ 
+@@ -536,6 +537,7 @@ export const composeReducer = (state = initialState, action) => {
+       map.set('idempotencyKey', uuid());
+       map.set('sensitive', action.status.get('sensitive'));
+       map.set('language', action.status.get('language'));
++      map.set('input_mode', composeInputModeFromContentType(action.content_type));
+       map.set('id', null);
+       map.set('quoted_status_id', action.quoted_status_id);
+       // Mastodon-authored posts can be expected to have at most one automatic approval policy
+@@ -574,6 +576,7 @@ export const composeReducer = (state = initialState, action) => {
+       map.set('idempotencyKey', uuid());
+       map.set('sensitive', action.status.get('sensitive'));
+       map.set('language', action.status.get('language'));
++      map.set('input_mode', composeInputModeFromContentType(action.content_type));
+       map.set('quoted_status_id', action.status.getIn(['quote', 'quoted_status'], null));
+       // Mastodon-authored posts can be expected to have at most one automatic approval policy
+       map.set('quote_policy', action.status.getIn(['quote_approval', 'automatic', 0]) || 'nobody');
+diff --git a/app/models/concerns/status/snapshot_concern.rb b/app/models/concerns/status/snapshot_concern.rb
+index 269545ce8b..e63680c450 100644
+--- a/app/models/concerns/status/snapshot_concern.rb
++++ b/app/models/concerns/status/snapshot_concern.rb
+@@ -18,6 +18,7 @@ module Status::SnapshotConcern
+     StatusEdit.new(
+       status_id: id,
+       text: text,
++      content_type: content_type,
+       spoiler_text: spoiler_text,
+       sensitive: sensitive,
+       ordered_media_attachment_ids: ordered_media_attachment_ids&.dup || media_attachments.pluck(:id),
+diff --git a/app/models/status.rb b/app/models/status.rb
+index 59fd518a88..2595c2ed56 100644
+--- a/app/models/status.rb
++++ b/app/models/status.rb
+@@ -7,6 +7,7 @@
+ #  id                           :bigint(8)        not null, primary key
+ #  uri                          :string
+ #  text                         :text             default(""), not null
++#  content_type                 :string
+ #  created_at                   :datetime         not null
+ #  updated_at                   :datetime         not null
+ #  in_reply_to_id               :bigint(8)
+@@ -46,6 +47,8 @@ class Status < ApplicationRecord
+   include Status::InteractionPolicyConcern
+ 
+   MEDIA_ATTACHMENTS_LIMIT = 4
++  CONTENT_TYPE_PLAIN = 'text/plain'
++  SUPPORTED_CONTENT_TYPES = [CONTENT_TYPE_PLAIN].freeze
+ 
+   rate_limit by: :account, family: :statuses
+ 
+@@ -103,6 +106,7 @@ class Status < ApplicationRecord
+ 
+   validates :uri, uniqueness: true, presence: true, unless: :local?
+   validates :text, presence: true, unless: -> { with_media? || reblog? || with_quote? }
++  validates :content_type, inclusion: { in: SUPPORTED_CONTENT_TYPES, allow_nil: true }
+   validates_with StatusLengthValidator
+   validates_with DisallowedHashtagsValidator
+   validates :reblog, uniqueness: { scope: :account }, if: :reblog?
+@@ -147,6 +151,7 @@ class Status < ApplicationRecord
+   after_create_commit :update_statistics, if: :local?
+ 
+   before_validation :prepare_contents, if: :local?
++  before_validation :normalize_content_type
+   before_validation :set_reblog
+   before_validation :set_conversation
+   before_validation :set_local
+@@ -200,6 +205,10 @@ class Status < ApplicationRecord
+     ActivityPub::TagManager.instance.uri_for(self)
+   end
+ 
++  def effective_content_type
++    content_type.presence || CONTENT_TYPE_PLAIN
++  end
++
+   def reply?
+     !in_reply_to_id.nil? || attributes['reply']
+   end
+@@ -471,6 +480,10 @@ class Status < ApplicationRecord
+     self.local = account.local?
+   end
+ 
++  def normalize_content_type
++    self.content_type = nil if content_type.blank?
++  end
++
+   def update_statistics
+     return unless distributable?
+ 
+diff --git a/app/models/status_edit.rb b/app/models/status_edit.rb
+index 060866e50c..57b1465039 100644
+--- a/app/models/status_edit.rb
++++ b/app/models/status_edit.rb
+@@ -8,6 +8,7 @@
+ #  status_id                    :bigint(8)        not null
+ #  account_id                   :bigint(8)
+ #  text                         :text             default(""), not null
++#  content_type                 :string
+ #  spoiler_text                 :text             default(""), not null
+ #  created_at                   :datetime         not null
+ #  updated_at                   :datetime         not null
+@@ -40,6 +41,8 @@ class StatusEdit < ApplicationRecord
+   belongs_to :status
+   belongs_to :account, optional: true
+ 
++  validates :content_type, inclusion: { in: Status::SUPPORTED_CONTENT_TYPES, allow_nil: true }
++
+   scope :ordered, -> { order(id: :asc) }
+ 
+   delegate :local?, :application, :edited?, :edited_at,
+@@ -103,6 +106,10 @@ class StatusEdit < ApplicationRecord
+     self
+   end
+ 
++  def effective_content_type
++    content_type.presence || Status::CONTENT_TYPE_PLAIN
++  end
++
+   def reblog?
+     false
+   end
+diff --git a/app/serializers/rest/status_serializer.rb b/app/serializers/rest/status_serializer.rb
+index 96751fbd57..8f5baab067 100644
+--- a/app/serializers/rest/status_serializer.rb
++++ b/app/serializers/rest/status_serializer.rb
+@@ -19,6 +19,7 @@ class REST::StatusSerializer < ActiveModel::Serializer
+ 
+   attribute :content, unless: :source_requested?
+   attribute :text, if: :source_requested?
++  attribute :content_type, if: :source_requested?
+ 
+   belongs_to :reblog, serializer: REST::StatusSerializer
+   belongs_to :application, if: :show_application?
+@@ -87,6 +88,10 @@ class REST::StatusSerializer < ActiveModel::Serializer
+     status_content_format(object)
+   end
+ 
++  def content_type
++    object.effective_content_type
++  end
++
+   def url
+     ActivityPub::TagManager.instance.url_for(object)
+   end
+diff --git a/app/serializers/rest/status_source_serializer.rb b/app/serializers/rest/status_source_serializer.rb
+index cd3c740847..5e241f2531 100644
+--- a/app/serializers/rest/status_source_serializer.rb
++++ b/app/serializers/rest/status_source_serializer.rb
+@@ -1,9 +1,13 @@
+ # frozen_string_literal: true
+ 
+ class REST::StatusSourceSerializer < ActiveModel::Serializer
+-  attributes :id, :text, :spoiler_text
++  attributes :id, :text, :spoiler_text, :content_type
+ 
+   def id
+     object.id.to_s
+   end
++
++  def content_type
++    object.effective_content_type
++  end
+ end
+diff --git a/app/services/post_status_service.rb b/app/services/post_status_service.rb
+index 3e4a715225..915b311079 100644
+--- a/app/services/post_status_service.rb
++++ b/app/services/post_status_service.rb
+@@ -21,6 +21,7 @@ class PostStatusService < BaseService
+   # @option [Status] :quoted_status Optional status to quote
+   # @option [String] :quote_approval_policy Approval policy for quotes, one of `public`, `followers` or `nobody`
+   # @option [Boolean] :sensitive
++  # @option [String] :content_type
+   # @option [String] :visibility
+   # @option [String] :spoiler_text
+   # @option [String] :language
+@@ -226,6 +227,7 @@ class PostStatusService < BaseService
+       thread: @in_reply_to,
+       poll_attributes: poll_attributes,
+       sensitive: @sensitive,
++      content_type: @options[:content_type],
+       spoiler_text: @options[:spoiler_text] || '',
+       visibility: @visibility,
+       language: valid_locale_cascade(@options[:language], @account.user&.preferred_posting_language, I18n.default_locale),
+diff --git a/app/services/update_status_service.rb b/app/services/update_status_service.rb
+index 4b871211a4..ae8ced1bfe 100644
+--- a/app/services/update_status_service.rb
++++ b/app/services/update_status_service.rb
+@@ -13,6 +13,7 @@ class UpdateStatusService < BaseService
+   # @option options [Array<Hash>] :media_attributes
+   # @option options [Hash] :poll
+   # @option options [String] :text
++  # @option options [String] :content_type
+   # @option options [String] :spoiler_text
+   # @option options [Boolean] :sensitive
+   # @option options [String] :language
+@@ -112,6 +113,7 @@ class UpdateStatusService < BaseService
+ 
+   def update_immediate_attributes!
+     @status.text         = @options[:text].presence || @options.delete(:spoiler_text) || '' if @options.key?(:text)
++    @status.content_type = @options[:content_type] if @options.key?(:content_type)
+     @status.spoiler_text = @options[:spoiler_text] || '' if @options.key?(:spoiler_text)
+     @status.sensitive    = @options[:sensitive] || @options[:spoiler_text].present? if @options.key?(:sensitive) || @options.key?(:spoiler_text)
+     @status.language     = valid_locale_cascade(@options[:language], @status.language, @status.account.user&.preferred_posting_language, I18n.default_locale)
+diff --git a/db/migrate/20260524194610_add_content_type_to_statuses.rb b/db/migrate/20260524194610_add_content_type_to_statuses.rb
+new file mode 100644
+index 0000000000..1a48d9087f
+--- /dev/null
++++ b/db/migrate/20260524194610_add_content_type_to_statuses.rb
+@@ -0,0 +1,8 @@
++# frozen_string_literal: true
++
++class AddContentTypeToStatuses < ActiveRecord::Migration[8.0]
++  def change
++    add_column :statuses, :content_type, :string
++    add_column :status_edits, :content_type, :string
++  end
++end
+diff --git a/db/schema.rb b/db/schema.rb
+index 7bdd6c0ce4..7b28b3dd91 100644
+--- a/db/schema.rb
++++ b/db/schema.rb
+@@ -10,7 +10,7 @@
+ #
+ # It's strongly recommended that you check this file into your version control system.
+ 
+-ActiveRecord::Schema[8.0].define(version: 2025_10_23_210145) do
++ActiveRecord::Schema[8.0].define(version: 2026_05_24_194610) do
+   # These are extensions that must be enabled in order to support this database
+   enable_extension "pg_catalog.plpgsql"
+ 
+@@ -1086,6 +1086,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_10_23_210145) do
+     t.string "poll_options", array: true
+     t.boolean "sensitive"
+     t.bigint "quote_id"
++    t.string "content_type"
+     t.index ["account_id"], name: "index_status_edits_on_account_id"
+     t.index ["status_id"], name: "index_status_edits_on_status_id"
+   end
+@@ -1148,6 +1149,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_10_23_210145) do
+     t.bigint "ordered_media_attachment_ids", array: true
+     t.datetime "fetched_replies_at"
+     t.integer "quote_approval_policy", default: 0, null: false
++    t.string "content_type"
+     t.index ["account_id", "id", "visibility", "updated_at"], name: "index_statuses_20190820", order: { id: :desc }, where: "(deleted_at IS NULL)"
+     t.index ["account_id"], name: "index_statuses_on_account_id"
+     t.index ["conversation_id"], name: "index_statuses_on_conversation_id"
+diff --git a/spec/requests/api/v1/statuses/sources_spec.rb b/spec/requests/api/v1/statuses/sources_spec.rb
+index 6b769f35e1..5ae266396d 100644
+--- a/spec/requests/api/v1/statuses/sources_spec.rb
++++ b/spec/requests/api/v1/statuses/sources_spec.rb
+@@ -28,6 +28,7 @@ RSpec.describe 'Sources' do
+           id: status.id.to_s,
+           text: status.text,
+           spoiler_text: status.spoiler_text,
++          content_type: 'text/plain',
+         })
+       end
+     end
+@@ -61,6 +62,7 @@ RSpec.describe 'Sources' do
+           id: status.id.to_s,
+           text: status.text,
+           spoiler_text: status.spoiler_text,
++          content_type: 'text/plain',
+         })
+       end
+     end
+diff --git a/spec/requests/api/v1/statuses_spec.rb b/spec/requests/api/v1/statuses_spec.rb
+index 70ec0567dc..96243a4b39 100644
+--- a/spec/requests/api/v1/statuses_spec.rb
++++ b/spec/requests/api/v1/statuses_spec.rb
+@@ -168,11 +168,24 @@ RSpec.describe '/api/v1/statuses' do
+           expect(response).to have_http_status(200)
+           expect(response.content_type)
+             .to start_with('application/json')
++          expect(response.parsed_body).to_not include(:content_type)
+           expect(response.headers['X-RateLimit-Limit']).to eq RateLimiter::FAMILIES[:statuses][:limit].to_s
+           expect(response.headers['X-RateLimit-Remaining']).to eq (RateLimiter::FAMILIES[:statuses][:limit] - 1).to_s
+         end
+       end
+ 
++      context 'with explicit plain text content type' do
++        let(:params) { { status: 'Hello world', content_type: 'text/plain' } }
++
++        it 'creates a plain text status without exposing content type in the response', :aggregate_failures do
++          subject
++
++          expect(response).to have_http_status(200)
++          expect(response.parsed_body).to_not include(:content_type)
++          expect(user.account.statuses.last.content_type).to eq 'text/plain'
++        end
++      end
++
+       context 'without a quote policy' do
+         let(:user) do
+           Fabricate(:user, settings: { default_quote_policy: 'followers' })
+@@ -495,7 +508,7 @@ RSpec.describe '/api/v1/statuses' do
+       end
+ 
+       let(:scopes) { 'write:statuses' }
+-      let(:status) { Fabricate(:status, account: user.account) }
++      let(:status) { Fabricate(:status, account: user.account, content_type: 'text/plain') }
+ 
+       it_behaves_like 'forbidden for wrong scope', 'read read:statuses'
+ 
+@@ -505,6 +518,7 @@ RSpec.describe '/api/v1/statuses' do
+         expect(response).to have_http_status(200)
+         expect(response.content_type)
+           .to start_with('application/json')
++        expect(response.parsed_body[:content_type]).to eq 'text/plain'
+         expect(Status.find_by(id: status.id)).to be_nil
+         expect(RemovalWorker).to have_enqueued_sidekiq_job(status.id, { 'redraft' => true })
+       end
+@@ -546,6 +560,27 @@ RSpec.describe '/api/v1/statuses' do
+         expect(status.reload.text).to eq 'I am updated'
+       end
+ 
++      context 'with explicit plain text content type' do
++        let(:params) { { status: 'I am updated', content_type: 'text/plain' } }
++
++        it 'updates the status content type without exposing it in the response', :aggregate_failures do
++          subject
++
++          expect(response).to have_http_status(200)
++          expect(response.parsed_body).to_not include(:content_type)
++          expect(status.reload.content_type).to eq 'text/plain'
++        end
++      end
++
++      context 'when content type param is omitted' do
++        let(:status) { Fabricate(:status, account: user.account, content_type: 'text/plain') }
++
++        it 'preserves the existing content type' do
++          expect { subject }
++            .to_not(change { status.reload.content_type })
++        end
++      end
++
+       context 'when updating only the quote policy' do
+         let(:params) { { status: status.text, quote_approval_policy: 'public' } }
+ 
+diff --git a/spec/serializers/rest/status_serializer_spec.rb b/spec/serializers/rest/status_serializer_spec.rb
+index 510328c7fb..f2cf80bf59 100644
+--- a/spec/serializers/rest/status_serializer_spec.rb
++++ b/spec/serializers/rest/status_serializer_spec.rb
+@@ -20,6 +20,28 @@ RSpec.describe REST::StatusSerializer do
+   let(:status) { Fabricate(:status, account: alice) }
+ 
+   context 'with a local status' do
++    context 'when source is requested' do
++      subject do
++        serialized_record_json(
++          status,
++          described_class,
++          options: {
++            scope: current_user,
++            scope_name: :current_user,
++            source_requested: true,
++          }
++        )
++      end
++
++      it 'includes the effective content type with source text' do
++        expect(subject)
++          .to include(
++            'text' => status.text,
++            'content_type' => 'text/plain'
++          )
++      end
++    end
++
+     context 'with a quote and a CW but no contents' do
+       let(:quoted_status) { Fabricate(:status, account: alice) }
+       let(:status) { Fabricate.build(:status, account: alice, text: '', spoiler_text: 'this is a CW') }
+diff --git a/spec/services/post_status_service_spec.rb b/spec/services/post_status_service_spec.rb
+index 96289cdeee..ede1421383 100644
+--- a/spec/services/post_status_service_spec.rb
++++ b/spec/services/post_status_service_spec.rb
+@@ -15,6 +15,13 @@ RSpec.describe PostStatusService do
+     expect(status.text).to eq text
+   end
+ 
++  it 'creates a plain text status with an explicit content type' do
++    status = subject.call(Fabricate(:account), text: 'test status update', content_type: 'text/plain')
++
++    expect(status).to be_persisted
++    expect(status.content_type).to eq 'text/plain'
++  end
++
+   it 'creates a new response status' do
+     in_reply_to_status = Fabricate(:status)
+     account = Fabricate(:account)
+@@ -34,7 +41,7 @@ RSpec.describe PostStatusService do
+ 
+     it 'schedules a status for future creation and does not create one immediately' do
+       media = Fabricate(:media_attachment, account: account)
+-      status = subject.call(account, text: 'Hi future!', media_ids: [media.id.to_s], scheduled_at: future)
++      status = subject.call(account, text: 'Hi future!', content_type: 'text/plain', media_ids: [media.id.to_s], scheduled_at: future)
+ 
+       expect(status)
+         .to be_a(ScheduledStatus)
+@@ -42,6 +49,7 @@ RSpec.describe PostStatusService do
+           scheduled_at: eq(future),
+           params: include(
+             'text' => eq('Hi future!'),
++            'content_type' => eq('text/plain'),
+             'media_ids' => contain_exactly(media.id.to_s)
+           )
+         )
+diff --git a/spec/services/update_status_service_spec.rb b/spec/services/update_status_service_spec.rb
+index 463605dd22..86d58a9ea3 100644
+--- a/spec/services/update_status_service_spec.rb
++++ b/spec/services/update_status_service_spec.rb
+@@ -42,6 +42,19 @@ RSpec.describe UpdateStatusService do
+     end
+   end
+ 
++  context 'when content type changes' do
++    let(:status) { Fabricate(:status, text: 'Foo', content_type: nil) }
++
++    it 'updates content type and saves edit history' do
++      subject.call(status, status.account_id, text: 'Foo', content_type: 'text/plain')
++
++      expect(status.reload.content_type)
++        .to eq 'text/plain'
++      expect(status.edits.ordered.pluck(:content_type))
++        .to eq [nil, 'text/plain']
++    end
++  end
++
+   context 'when content warning changes' do
+     let(:status) { Fabricate(:status, text: 'Foo', spoiler_text: '') }
+     let(:preview_card) { Fabricate(:preview_card) }

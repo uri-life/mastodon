@@ -1,0 +1,360 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Tue, 26 May 2026 19:10:24 +0900
+Subject: [PATCH] Add visual colour previews to hex code hashtags
+
+- Implement HashtagColorPreview helper component
+- Calculate luminance to support adaptive swatch styling
+- Integrate preview swatch into HandledLink and HashtagBar
+- Ensure hex code extraction matches expected formatting
+- Add unit tests for colour detection and rendering
+
+Rationale: Providing an immediate visual representation for hex-code hashtags enhances the user experience for design-focused discussions by removing the need to manually interpret colour values.
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+
+diff --git a/app/javascript/mastodon/components/__tests__/hashtag_bar.tsx b/app/javascript/mastodon/components/__tests__/hashtag_bar.tsx
+index f86c1a2a6b..dfa778c23f 100644
+--- a/app/javascript/mastodon/components/__tests__/hashtag_bar.tsx
++++ b/app/javascript/mastodon/components/__tests__/hashtag_bar.tsx
+@@ -1,7 +1,14 @@
++import { MemoryRouter } from 'react-router-dom';
++
+ import { fromJS } from 'immutable';
+ 
++import { cleanup, render, screen } from '@testing-library/react';
++
+ import type { StatusLike } from '../hashtag_bar';
+-import { computeHashtagBarForStatus } from '../hashtag_bar';
++import {
++  computeHashtagBarForStatus,
++  getHashtagBarForStatus,
++} from '../hashtag_bar';
+ 
+ function createStatus(
+   content: string,
+@@ -14,6 +21,7 @@ function createStatus(
+     contentHtml: content,
+     media_attachments: hasMedia ? ['fakeMedia'] : [],
+     spoiler_text: spoilerText,
++    account: { id: '42' },
+   }) as unknown as StatusLike; // need to force the type here, as it is not properly defined
+ }
+ 
+@@ -212,3 +220,31 @@ describe('computeHashtagBarForStatus', () => {
+     );
+   });
+ });
++
++describe('getHashtagBarForStatus', () => {
++  afterEach(cleanup);
++
++  it('renders color previews for six-digit color hashtags in the bar', () => {
++    const status = createStatus('<p>Simple text</p>', ['AABBCC']);
++    const { hashtagBar } = getHashtagBarForStatus(status);
++
++    render(<MemoryRouter>{hashtagBar}</MemoryRouter>);
++
++    const link = screen.getByRole('link', { name: '#AABBCC' });
++
++    expect(link.getAttribute('href')).toBe('/tags/AABBCC');
++    expect(link.getAttribute('data-menu-hashtag')).toBe('42');
++    expect(link.querySelector('.hashtag__color-preview')).not.toBeNull();
++  });
++
++  it('does not render color previews for shorthand colors in the bar', () => {
++    const status = createStatus('<p>Simple text</p>', ['abc']);
++    const { hashtagBar } = getHashtagBarForStatus(status);
++
++    render(<MemoryRouter>{hashtagBar}</MemoryRouter>);
++
++    const link = screen.getByRole('link', { name: '#abc' });
++
++    expect(link.querySelector('.hashtag__color-preview')).toBeNull();
++  });
++});
+diff --git a/app/javascript/mastodon/components/hashtag_bar.tsx b/app/javascript/mastodon/components/hashtag_bar.tsx
+index f6b72d4340..638fca5f6d 100644
+--- a/app/javascript/mastodon/components/hashtag_bar.tsx
++++ b/app/javascript/mastodon/components/hashtag_bar.tsx
+@@ -8,6 +8,7 @@ import type { List, Record } from 'immutable';
+ 
+ import { groupBy, minBy } from 'lodash';
+ 
++import { HashtagColorPreview } from './status/hashtag_color_preview';
+ import { getStatusContent } from './status_content';
+ 
+ // Fit on a single line on desktop
+@@ -230,7 +231,7 @@ const HashtagBar: React.FC<{
+           to={`/tags/${hashtag}`}
+           data-menu-hashtag={accountId}
+         >
+-          #<span>{hashtag}</span>
++          <HashtagColorPreview hashtag={`#${hashtag}`} />#<span>{hashtag}</span>
+         </Link>
+       ))}
+ 
+diff --git a/app/javascript/mastodon/components/status/__tests__/handled_link.test.tsx b/app/javascript/mastodon/components/status/__tests__/handled_link.test.tsx
+new file mode 100644
+index 0000000000..ade25ee56b
+--- /dev/null
++++ b/app/javascript/mastodon/components/status/__tests__/handled_link.test.tsx
+@@ -0,0 +1,108 @@
++import { MemoryRouter } from 'react-router-dom';
++
++import { cleanup, render, screen } from '@testing-library/react';
++
++import { HandledLink } from '../handled_link';
++import {
++  getHashtagColorPreviewData,
++  HashtagColorPreview,
++} from '../hashtag_color_preview';
++
++const renderHandledLink = ({
++  text,
++  prevText,
++}: {
++  text: string;
++  prevText?: string;
++}) =>
++  render(
++    <MemoryRouter>
++      <HandledLink
++        href={`https://example.com/tags/${text.replace(/^#/, '')}`}
++        text={text}
++        prevText={prevText}
++        hashtagAccountId='42'
++      >
++        <span>{text}</span>
++      </HandledLink>
++    </MemoryRouter>,
++  );
++
++describe('getHashtagColorPreviewData', () => {
++  it('returns preview data for six-digit hex color hashtags', () => {
++    expect(getHashtagColorPreviewData('#000000')).toEqual({
++      color: '#000000',
++      isLight: false,
++    });
++    expect(getHashtagColorPreviewData('#FFFFFF')).toEqual({
++      color: '#FFFFFF',
++      isLight: true,
++    });
++  });
++
++  it('does not return preview data for non-six-digit color hashtags', () => {
++    expect(getHashtagColorPreviewData('#abc')).toBeUndefined();
++    expect(getHashtagColorPreviewData('#AABBCCDD')).toBeUndefined();
++    expect(getHashtagColorPreviewData('#GGGGGG')).toBeUndefined();
++    expect(getHashtagColorPreviewData('AABBCC')).toBeUndefined();
++  });
++});
++
++describe('HashtagColorPreview', () => {
++  afterEach(cleanup);
++
++  it('renders an aria-hidden swatch for color hashtags', () => {
++    const { container } = render(<HashtagColorPreview hashtag='#AABBCC' />);
++    const preview = container.querySelector('.hashtag__color-preview');
++
++    expect(preview).not.toBeNull();
++    expect(preview?.getAttribute('aria-hidden')).toBe('true');
++  });
++
++  it('does not render a swatch for shorthand colors', () => {
++    const { container } = render(<HashtagColorPreview hashtag='#abc' />);
++
++    expect(container.querySelector('.hashtag__color-preview')).toBeNull();
++  });
++});
++
++describe('HandledLink', () => {
++  afterEach(cleanup);
++
++  it('renders a color preview for six-digit color hashtags', () => {
++    renderHandledLink({ text: '#AABBCC' });
++
++    const link = screen.getByRole('link', { name: '#AABBCC' });
++
++    expect(link.getAttribute('href')).toBe('/tags/AABBCC');
++    expect(link.getAttribute('rel')).toBe('tag');
++    expect(link.getAttribute('data-menu-hashtag')).toBe('42');
++    expect(link.querySelector('.hashtag__color-preview')).not.toBeNull();
++  });
++
++  it('renders a color preview for split hashtag text', () => {
++    renderHandledLink({ text: 'AABBCC', prevText: '#' });
++
++    const link = screen.getByRole('link', { name: 'AABBCC' });
++
++    expect(link.getAttribute('href')).toBe('/tags/AABBCC');
++    expect(link.querySelector('.hashtag__color-preview')).not.toBeNull();
++  });
++
++  it('does not render a color preview for shorthand colors', () => {
++    renderHandledLink({ text: '#abc' });
++
++    const link = screen.getByRole('link', { name: '#abc' });
++
++    expect(link.getAttribute('href')).toBe('/tags/abc');
++    expect(link.querySelector('.hashtag__color-preview')).toBeNull();
++  });
++
++  it('does not render a color preview for non-color hashtags', () => {
++    renderHandledLink({ text: '#notacolor' });
++
++    const link = screen.getByRole('link', { name: '#notacolor' });
++
++    expect(link.querySelector('.hashtag__color-preview')).toBeNull();
++  });
++});
+diff --git a/app/javascript/mastodon/components/status/handled_link.tsx b/app/javascript/mastodon/components/status/handled_link.tsx
+index 5fcea5f8b9..5ecd44d905 100644
+--- a/app/javascript/mastodon/components/status/handled_link.tsx
++++ b/app/javascript/mastodon/components/status/handled_link.tsx
+@@ -7,6 +7,8 @@ import { Link } from 'react-router-dom';
+ import type { ApiMentionJSON } from '@/mastodon/api_types/statuses';
+ import type { OnElementHandler } from '@/mastodon/utils/html';
+ 
++import { HashtagColorPreview } from './hashtag_color_preview';
++
+ export interface HandledLinkProps {
+   href: string;
+   text: string;
+@@ -25,15 +27,16 @@ export const HandledLink: FC<HandledLinkProps & ComponentProps<'a'>> = ({
+   children,
+   ...props
+ }) => {
++  const textHasHashtagPrefix = text.startsWith('#') || text.startsWith('＃');
++  const prevTextHasHashtagPrefix =
++    prevText?.endsWith('#') || prevText?.endsWith('＃');
++
+   // Handle hashtags
+   if (
+-    (text.startsWith('#') ||
+-      prevText?.endsWith('#') ||
+-      text.startsWith('＃') ||
+-      prevText?.endsWith('＃')) &&
++    (textHasHashtagPrefix || prevTextHasHashtagPrefix) &&
+     !text.includes('%')
+   ) {
+-    const hashtag = text.slice(1).trim();
++    const hashtag = (textHasHashtagPrefix ? text.slice(1) : text).trim();
+ 
+     return (
+       <Link
+@@ -42,6 +45,7 @@ export const HandledLink: FC<HandledLinkProps & ComponentProps<'a'>> = ({
+         rel='tag'
+         data-menu-hashtag={hashtagAccountId}
+       >
++        <HashtagColorPreview hashtag={`#${hashtag}`} />
+         {children}
+       </Link>
+     );
+diff --git a/app/javascript/mastodon/components/status/hashtag_color_preview.tsx b/app/javascript/mastodon/components/status/hashtag_color_preview.tsx
+new file mode 100644
+index 0000000000..2ec2f11bf6
+--- /dev/null
++++ b/app/javascript/mastodon/components/status/hashtag_color_preview.tsx
+@@ -0,0 +1,64 @@
++import type { CSSProperties, FC } from 'react';
++
++import classNames from 'classnames';
++
++const HEX_COLOR_HASHTAG_REGEX = /^#([0-9a-fA-F]{6})$/;
++const LIGHT_COLOR_LUMINANCE_THRESHOLD = 0.179;
++
++interface HashtagColorPreviewData {
++  color: string;
++  isLight: boolean;
++}
++
++const toLinear = (channel: number) => {
++  const value = channel / 255;
++
++  return value <= 0.04045
++    ? value / 12.92
++    : Math.pow((value + 0.055) / 1.055, 2.4);
++};
++
++export const getHashtagColorPreviewData = (
++  hashtag: string,
++): HashtagColorPreviewData | undefined => {
++  const match = HEX_COLOR_HASHTAG_REGEX.exec(hashtag);
++  const hex = match?.[1];
++
++  if (!hex) {
++    return undefined;
++  }
++
++  const red = parseInt(hex.slice(0, 2), 16);
++  const green = parseInt(hex.slice(2, 4), 16);
++  const blue = parseInt(hex.slice(4, 6), 16);
++  const luminance =
++    0.2126 * toLinear(red) + 0.7152 * toLinear(green) + 0.0722 * toLinear(blue);
++
++  return {
++    color: `#${hex}`,
++    isLight: luminance > LIGHT_COLOR_LUMINANCE_THRESHOLD,
++  };
++};
++
++export const HashtagColorPreview: FC<{ hashtag: string }> = ({ hashtag }) => {
++  const preview = getHashtagColorPreviewData(hashtag);
++
++  if (!preview) {
++    return null;
++  }
++
++  const style: CSSProperties = {
++    backgroundColor: preview.color,
++  };
++
++  return (
++    <span
++      aria-hidden='true'
++      className={classNames('hashtag__color-preview', {
++        'hashtag__color-preview--light': preview.isLight,
++        'hashtag__color-preview--dark': !preview.isLight,
++      })}
++      style={style}
++    />
++  );
++};
+diff --git a/app/javascript/styles/mastodon/components.scss b/app/javascript/styles/mastodon/components.scss
+index 57bd22007e..da0cbaada8 100644
+--- a/app/javascript/styles/mastodon/components.scss
++++ b/app/javascript/styles/mastodon/components.scss
+@@ -10590,6 +10590,7 @@ noscript {
+ 
+   a {
+     display: inline-flex;
++    align-items: baseline;
+     color: inherit;
+     text-decoration: none;
+     padding: 4px 12px;
+@@ -10612,6 +10613,24 @@ noscript {
+   }
+ }
+ 
++.status__content,
++.edit-indicator__content,
++.reply-indicator__content,
++.account__header__content,
++.account__header__fields,
++.hashtag-bar {
++  .hashtag__color-preview {
++    display: inline-block;
++    flex: 0 0 auto;
++    box-sizing: border-box;
++    width: 0.75em;
++    height: 0.75em;
++    border: 1px solid $ui-secondary-color;
++    border-radius: 50%;
++    text-decoration: none;
++  }
++}
++
+ .inline-follow-suggestions {
+   display: flex;
+   flex-direction: column;

@@ -1,0 +1,63 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Wed, 27 May 2026 15:31:19 +0900
+Subject: [PATCH] Increase status character limit to 2026
+
+- Increase the global maximum character constant to 2026
+- Update instance serializers to cap character limits by the current year
+- Sync frontend compose form state with dynamic character constraints
+
+Rationale: This change implements a dynamic status length limit that scales with the calendar year, significantly increasing the potential ceiling for user posts whilst ensuring consistent validation across the API and frontend.
+
+diff --git a/app/javascript/mastodon/features/compose/containers/compose_form_container.js b/app/javascript/mastodon/features/compose/containers/compose_form_container.js
+index ef4e2b6238..4db5d72cf0 100644
+--- a/app/javascript/mastodon/features/compose/containers/compose_form_container.js
++++ b/app/javascript/mastodon/features/compose/containers/compose_form_container.js
+@@ -41,7 +41,7 @@ const mapStateToProps = state => ({
+     && !state.getIn(['settings', 'dismissed_banners', PRIVATE_QUOTE_MODAL_ID]),
+   isInReply: state.getIn(['compose', 'in_reply_to']) !== null,
+   lang: state.getIn(['compose', 'language']),
+-  maxChars: state.getIn(['server', 'server', 'configuration', 'statuses', 'max_characters'], 500),
++  maxChars: state.getIn(['server', 'server', 'configuration', 'statuses', 'max_characters'], new Date(Date.now() + 32400000).getUTCFullYear()),
+ });
+ 
+ const mapDispatchToProps = (dispatch, props) => ({
+diff --git a/app/serializers/rest/instance_serializer.rb b/app/serializers/rest/instance_serializer.rb
+index 36ddfae328..c5481f198b 100644
+--- a/app/serializers/rest/instance_serializer.rb
++++ b/app/serializers/rest/instance_serializer.rb
+@@ -74,7 +74,7 @@ class REST::InstanceSerializer < ActiveModel::Serializer
+       },
+ 
+       statuses: {
+-        max_characters: StatusLengthValidator::MAX_CHARS,
++        max_characters: [StatusLengthValidator::MAX_CHARS, Time.now.year].min, # rubocop:disable Rails/TimeZone
+         max_media_attachments: Status::MEDIA_ATTACHMENTS_LIMIT,
+         characters_reserved_per_url: StatusLengthValidator::URL_PLACEHOLDER_CHARS,
+       },
+diff --git a/app/serializers/rest/v1/instance_serializer.rb b/app/serializers/rest/v1/instance_serializer.rb
+index a1d51f50e4..490c3d30b0 100644
+--- a/app/serializers/rest/v1/instance_serializer.rb
++++ b/app/serializers/rest/v1/instance_serializer.rb
+@@ -55,7 +55,7 @@ class REST::V1::InstanceSerializer < ActiveModel::Serializer
+       },
+ 
+       statuses: {
+-        max_characters: StatusLengthValidator::MAX_CHARS,
++        max_characters: [StatusLengthValidator::MAX_CHARS, Time.now.year].min, # rubocop:disable Rails/TimeZone
+         max_media_attachments: Status::MEDIA_ATTACHMENTS_LIMIT,
+         characters_reserved_per_url: StatusLengthValidator::URL_PLACEHOLDER_CHARS,
+       },
+diff --git a/app/validators/status_length_validator.rb b/app/validators/status_length_validator.rb
+index 575aaf1869..c7c5d741fd 100644
+--- a/app/validators/status_length_validator.rb
++++ b/app/validators/status_length_validator.rb
+@@ -1,7 +1,7 @@
+ # frozen_string_literal: true
+ 
+ class StatusLengthValidator < ActiveModel::Validator
+-  MAX_CHARS = 500
++  MAX_CHARS = 2026
+   URL_PLACEHOLDER_CHARS = 23
+   URL_PLACEHOLDER = 'x' * 23
+ 

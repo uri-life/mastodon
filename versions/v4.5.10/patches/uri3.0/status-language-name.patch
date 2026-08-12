@@ -1,0 +1,163 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Tue, 26 May 2026 09:16:19 +0900
+Subject: [PATCH] Display post language in UI
+
+- Normalise language codes for Intl.DisplayNames compatibility
+- Add getLanguageName helper to initial_state
+- Show language name in Status and DetailedStatus components
+- Prevent redundant screen reader announcements with aria-hidden
+- Refine hover styles to exclude language label from underline
+
+Rationale: Displaying the post language assists users in identifying content that may not be in their primary language, improving overall accessibility and user awareness.
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+
+diff --git a/app/javascript/mastodon/components/status.jsx b/app/javascript/mastodon/components/status.jsx
+index aac58b31f4..2fa0833ac7 100644
+--- a/app/javascript/mastodon/components/status.jsx
++++ b/app/javascript/mastodon/components/status.jsx
+@@ -24,7 +24,7 @@ import Card from '../features/status/components/card';
+ import Bundle from '../features/ui/components/bundle';
+ import { MediaGallery, Video, Audio } from '../features/ui/util/async-components';
+ import { SensitiveMediaContext } from '../features/ui/util/sensitive_media_context';
+-import { displayMedia } from '../initial_state';
++import { displayMedia, getLanguageName } from '../initial_state';
+ 
+ import { Avatar } from './avatar';
+ import { AvatarOverlay } from './avatar_overlay';
+@@ -553,6 +553,7 @@ class Status extends ImmutablePureComponent {
+       statusAvatar = <AvatarOverlay account={status.get('account')} friend={account} />;
+     }
+ 
++    const languageName = getLanguageName(status.get('language'));
+     const {statusContentProps, hashtagBar} = getHashtagBarForStatus(status);
+ 
+     return (
+@@ -580,6 +581,7 @@ class Status extends ImmutablePureComponent {
+               <Link to={`/@${status.getIn(['account', 'acct'])}/${status.get('id')}`} className='status__relative-time'>
+                 <span className='status__visibility-icon'><VisibilityIcon visibility={status.get('visibility')} /></span>
+                 <RelativeTimestamp timestamp={status.get('created_at')} />{status.get('edited_at') && <abbr title={intl.formatMessage(messages.edited, { date: intl.formatDate(status.get('edited_at'), { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' }) })}> *</abbr>}
++                {languageName && <div className='status__language-name' aria-hidden='true'>{languageName}</div>}
+               </Link>
+ 
+               <LinkedDisplayName displayProps={{account: status.get('account')}} className='status__display-name'>
+diff --git a/app/javascript/mastodon/features/status/components/detailed_status.tsx b/app/javascript/mastodon/features/status/components/detailed_status.tsx
+index 6d432e1f24..3fcc342eea 100644
+--- a/app/javascript/mastodon/features/status/components/detailed_status.tsx
++++ b/app/javascript/mastodon/features/status/components/detailed_status.tsx
+@@ -32,6 +32,7 @@ import { Audio } from 'mastodon/features/audio';
+ import scheduleIdleTask from 'mastodon/features/ui/util/schedule_idle_task';
+ import { Video } from 'mastodon/features/video';
+ import { useIdentity } from 'mastodon/identity_context';
++import { getLanguageName } from 'mastodon/initial_state';
+ 
+ import Card from './card';
+ 
+@@ -187,6 +188,9 @@ export const DetailedStatus: React.FC<{
+ 
+   const language =
+     status.getIn(['translation', 'language']) || status.get('language');
++  const sourceLanguageName = getLanguageName(
++    status.get('language') as string | null | undefined,
++  );
+ 
+   if (pictureInPicture.get('inUse')) {
+     media = <PictureInPicturePlaceholder aspectRatio={attachmentAspectRatio} />;
+@@ -470,6 +474,11 @@ export const DetailedStatus: React.FC<{
+             </a>
+ 
+             {visibilityLink}
++            {sourceLanguageName && (
++              <>
++                ·<span>{sourceLanguageName}</span>
++              </>
++            )}
+             {applicationLink}
+           </div>
+ 
+diff --git a/app/javascript/mastodon/initial_state.ts b/app/javascript/mastodon/initial_state.ts
+index 3bfd48a76b..ef2f24c70d 100644
+--- a/app/javascript/mastodon/initial_state.ts
++++ b/app/javascript/mastodon/initial_state.ts
+@@ -129,6 +129,9 @@ export const statusPageUrl = getMeta('status_page_url');
+ export const sso_redirect = getMeta('sso_redirect');
+ export const termsOfServiceEnabled = getMeta('terms_of_service_enabled');
+ 
++const normalizeLanguageCode = (language: string) =>
++  language.replace('zh-YUE', 'yue');
++
+ const displayNames =
+   // Intl.DisplayNames can be undefined in old browsers
+   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+@@ -139,14 +142,42 @@ const displayNames =
+     languageDisplay: 'standard',
+   }) as Intl.DisplayNames | undefined);
+ 
+-export const languages = initialState?.languages.map((lang) => {
+-  // zh-YUE is not a valid CLDR unicode_language_id
+-  return [
+-    lang[0],
+-    displayNames?.of(lang[0].replace('zh-YUE', 'yue')) ?? lang[1],
+-    lang[2],
+-  ];
+-});
++const getDisplayName = (language: string) => {
++  if (!displayNames) {
++    return undefined;
++  }
++
++  try {
++    return displayNames.of(normalizeLanguageCode(language));
++  } catch (error) {
++    if (error instanceof RangeError) {
++      return undefined;
++    }
++
++    throw error;
++  }
++};
++
++export const languages: InitialStateLanguage[] | undefined =
++  initialState?.languages.map((lang) => {
++    return [lang[0], getDisplayName(lang[0]) ?? lang[1], lang[2]];
++  });
++
++const languageNames = new Map<string, string>(
++  languages?.map(([code, name]) => [code, name]) ?? [],
++);
++
++export const getLanguageName = (
++  language: string | null | undefined,
++): string | undefined => {
++  if (!language) {
++    return undefined;
++  }
++
++  return [languageNames.get(language), getDisplayName(language), language].find(
++    Boolean,
++  );
++};
+ 
+ export function getAccessToken(): string | undefined {
+   return getMeta('access_token');
+diff --git a/app/javascript/styles/mastodon/components.scss b/app/javascript/styles/mastodon/components.scss
+index 57bd22007e..c860aaecff 100644
+--- a/app/javascript/styles/mastodon/components.scss
++++ b/app/javascript/styles/mastodon/components.scss
+@@ -1644,6 +1644,15 @@
+   order: 2;
+   flex: 0 0 auto;
+   color: $dark-text-color;
++  text-align: end;
++
++  &:hover {
++    text-decoration: none !important;
++
++    :not(.status__language-name) {
++      text-decoration: underline;
++    }
++  }
+ }
+ 
+ .notification__relative_time {

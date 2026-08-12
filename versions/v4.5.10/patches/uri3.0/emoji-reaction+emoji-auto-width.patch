@@ -1,0 +1,69 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Thu, 13 Aug 2026 03:25:52 +0900
+Subject: [PATCH] Standardise emoji sizing across status controls
+
+- Use `--emoji-size` for inline and reaction emojis
+- Allow poll emojis to retain their natural aspect ratio
+- Add minimum sizing without forcing image widths
+
+Rationale: Centralising emoji dimensions improves visual consistency while preventing distortion of rectangular custom emoji assets.
+
+diff --git a/app/javascript/styles/mastodon/components.scss b/app/javascript/styles/mastodon/components.scss
+index d583b729be..fef7b1e440 100644
+--- a/app/javascript/styles/mastodon/components.scss
++++ b/app/javascript/styles/mastodon/components.scss
+@@ -2142,8 +2142,8 @@
+     background: var(--background-color);
+ 
+     .emojione {
+-      width: 18px;
+-      height: 18px;
++      --emoji-size: 18px;
++
+       margin: 0;
+     }
+   }
+@@ -2666,8 +2666,8 @@ a.account__display-name {
+     flex: 0 0 auto;
+ 
+     .emojione {
+-      width: 18px;
+-      height: 18px;
++      --emoji-size: 18px;
++
+       margin: 0;
+     }
+   }
+@@ -9139,15 +9139,17 @@ noscript {
+     transition-property: background-color, color;
+ 
+     &__emoji {
++      --emoji-size: 16px;
++
+       display: block;
+       margin: 3px 0;
+-      width: 16px;
+-      height: 16px;
++      width: auto;
++      min-width: var(--emoji-size);
++      height: var(--emoji-size);
+ 
+       img {
+         display: block;
+         margin: 0;
+-        width: 100%;
+         height: 100%;
+         min-width: auto;
+         min-height: auto;
+@@ -11178,8 +11180,8 @@ noscript {
+   }
+ 
+   &__reaction .emojione {
+-    width: 22px;
+-    height: 22px;
++    --emoji-size: 22px;
++
+     margin: 0;
+   }
+ 

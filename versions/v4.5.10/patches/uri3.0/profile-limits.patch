@@ -1,0 +1,250 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Wed, 27 May 2026 16:28:22 +0900
+Subject: [PATCH] Expand profile metadata capacity and UI
+
+- Implement progressive disclosure for profile metadata fields
+- Increase maximum profile metadata fields from 4 to 12
+- Extend display name limit to 120 and bio limit to 4,000
+- Add event delegation to auto-reveal fields upon user input
+- Update system specs to verify dynamic field visibility
+
+Rationale: These updates accommodate richer user profiles and improve the user experience by reducing initial clutter while allowing for expanded metadata input.
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+
+diff --git a/app/javascript/entrypoints/public.tsx b/app/javascript/entrypoints/public.tsx
+index ff6819f8ac..d7ee203e46 100644
+--- a/app/javascript/entrypoints/public.tsx
++++ b/app/javascript/entrypoints/public.tsx
+@@ -32,6 +32,43 @@ const messages = defineMessages({
+   },
+ });
+ 
++const profileMetadataFieldsSelector = '[data-profile-metadata-fields]';
++const profileMetadataFieldSelector =
++  'input[data-profile-metadata-field="name"], input[data-profile-metadata-field="value"]';
++const profileMetadataFieldsInputSelector = [
++  `${profileMetadataFieldsSelector} input[data-profile-metadata-field="name"]`,
++  `${profileMetadataFieldsSelector} input[data-profile-metadata-field="value"]`,
++].join(', ');
++const profileMetadataFieldRowSelector = '.profile-metadata-fields__row';
++const profileMetadataFieldRowHiddenClass =
++  'profile-metadata-fields__row--hidden';
++
++const profileMetadataFieldRowHasValue = (row: HTMLElement) =>
++  Array.from(
++    row.querySelectorAll<HTMLInputElement>(profileMetadataFieldSelector),
++  ).some((input) => input.value.length > 0);
++
++const updateProfileMetadataFieldRows = (container: Element) => {
++  const rows = Array.from(
++    container.querySelectorAll<HTMLElement>(profileMetadataFieldRowSelector),
++  );
++
++  let lastFilledIndex = -1;
++  rows.forEach((row, index) => {
++    if (profileMetadataFieldRowHasValue(row)) {
++      lastFilledIndex = index;
++    }
++  });
++
++  const rowsToShow = Math.min(rows.length, Math.max(1, lastFilledIndex + 2));
++
++  rows.forEach((row, index) => {
++    const hidden = index >= rowsToShow;
++    row.hidden = hidden;
++    row.classList.toggle(profileMetadataFieldRowHiddenClass, hidden);
++  });
++};
++
+ function loaded() {
+   const { messages: localeData } = getLocale();
+ 
+@@ -145,6 +182,10 @@ function loaded() {
+       );
+     });
+ 
++  document
++    .querySelectorAll(profileMetadataFieldsSelector)
++    .forEach(updateProfileMetadataFieldRows);
++
+   updateDefaultQuotePrivacyFromPrivacy(
+     document.querySelector('#user_settings_attributes_default_privacy'),
+   );
+@@ -265,6 +306,20 @@ Rails.delegate(
+   },
+ );
+ 
++Rails.delegate(
++  document,
++  profileMetadataFieldsInputSelector,
++  'input',
++  ({ target }) => {
++    if (!(target instanceof HTMLInputElement)) return;
++
++    const container = target.closest(profileMetadataFieldsSelector);
++    if (container) {
++      updateProfileMetadataFieldRows(container);
++    }
++  },
++);
++
+ Rails.delegate(document, '.input-copy input', 'click', ({ target }) => {
+   if (!(target instanceof HTMLInputElement)) return;
+ 
+diff --git a/app/javascript/styles/mastodon/accounts.scss b/app/javascript/styles/mastodon/accounts.scss
+index da4b9bdaa8..7ad85fa217 100644
+--- a/app/javascript/styles/mastodon/accounts.scss
++++ b/app/javascript/styles/mastodon/accounts.scss
+@@ -272,10 +272,6 @@
+     box-sizing: border-box;
+     padding: 14px;
+     text-align: center;
+-    max-height: 48px;
+-    overflow: hidden;
+-    white-space: nowrap;
+-    text-overflow: ellipsis;
+   }
+ 
+   dt {
+diff --git a/app/javascript/styles/mastodon/forms.scss b/app/javascript/styles/mastodon/forms.scss
+index e0ccd0a27f..aa9dc5a71b 100644
+--- a/app/javascript/styles/mastodon/forms.scss
++++ b/app/javascript/styles/mastodon/forms.scss
+@@ -179,6 +179,10 @@ code {
+     }
+   }
+ 
++  .profile-metadata-fields__row--hidden {
++    display: none;
++  }
++
+   .title {
+     font-size: 28px;
+     line-height: 33px;
+diff --git a/app/models/account.rb b/app/models/account.rb
+index 4ec2af7aba..a1816f3e7e 100644
+--- a/app/models/account.rb
++++ b/app/models/account.rb
+@@ -69,7 +69,7 @@ class Account < ApplicationRecord
+   BACKGROUND_REFRESH_INTERVAL = 1.week.freeze
+   REFRESH_DEADLINE = 6.hours
+   STALE_THRESHOLD = 1.day
+-  DEFAULT_FIELDS_SIZE = 4
++  DEFAULT_FIELDS_SIZE = 12
+   INSTANCE_ACTOR_ID = -99
+ 
+   USERNAME_RE   = /[a-z0-9_]+([.-]+[a-z0-9_]+)*/i
+@@ -77,8 +77,8 @@ class Account < ApplicationRecord
+   URL_PREFIX_RE = %r{\Ahttp(s?)://[^/]+}
+   USERNAME_ONLY_RE = /\A#{USERNAME_RE}\z/i
+   USERNAME_LENGTH_LIMIT = 30
+-  DISPLAY_NAME_LENGTH_LIMIT = 30
+-  NOTE_LENGTH_LIMIT = 500
++  DISPLAY_NAME_LENGTH_LIMIT = 120
++  NOTE_LENGTH_LIMIT = 4000
+ 
+   # Hard limits for federated content
+   USERNAME_LENGTH_HARD_LIMIT = 2048
+diff --git a/app/views/settings/profiles/show.html.haml b/app/views/settings/profiles/show.html.haml
+index 3815eb7fc2..bbd5f0a0a7 100644
+--- a/app/views/settings/profiles/show.html.haml
++++ b/app/views/settings/profiles/show.html.haml
+@@ -25,10 +25,22 @@
+         %label= t('simple_form.labels.defaults.fields')
+         %span.hint= t('simple_form.hints.account.fields')
+ 
+-        = f.simple_fields_for :fields do |fields_f|
+-          .row
+-            = fields_f.input :name, placeholder: t('simple_form.labels.account.fields.name'), input_html: { maxlength: Account::Field::MAX_CHARACTERS_LOCAL }
+-            = fields_f.input :value, placeholder: t('simple_form.labels.account.fields.value'), input_html: { maxlength: Account::Field::MAX_CHARACTERS_LOCAL }
++        :ruby
++          profile_metadata_fields = @account.fields
++          last_filled_profile_metadata_field_index = profile_metadata_fields.rindex { |field| field.name.present? || field.value.present? }
++          visible_profile_metadata_fields_count = [
++            profile_metadata_fields.size,
++            last_filled_profile_metadata_field_index.nil? ? 1 : last_filled_profile_metadata_field_index + 2,
++          ].min
++          profile_metadata_field_index = -1
++
++        .profile-metadata-fields{ data: { profile_metadata_fields: true } }
++          = f.simple_fields_for :fields do |fields_f|
++            - profile_metadata_field_index += 1
++            - profile_metadata_field_hidden = profile_metadata_field_index >= visible_profile_metadata_fields_count
++            .row.profile-metadata-fields__row{ class: ('profile-metadata-fields__row--hidden' if profile_metadata_field_hidden), hidden: profile_metadata_field_hidden }
++              = fields_f.input :name, placeholder: t('simple_form.labels.account.fields.name'), input_html: { maxlength: Account::Field::MAX_CHARACTERS_LOCAL, data: { profile_metadata_field: 'name' } }
++              = fields_f.input :value, placeholder: t('simple_form.labels.account.fields.value'), input_html: { maxlength: Account::Field::MAX_CHARACTERS_LOCAL, data: { profile_metadata_field: 'value' } }
+ 
+   .fields-row
+     .fields-row__column.fields-row__column-6
+diff --git a/spec/system/settings/profiles_spec.rb b/spec/system/settings/profiles_spec.rb
+index 23d9ab2fda..f3ef7156af 100644
+--- a/spec/system/settings/profiles_spec.rb
++++ b/spec/system/settings/profiles_spec.rb
+@@ -26,6 +26,48 @@ RSpec.describe 'Settings profile page' do
+       .to have_enqueued_sidekiq_job(account.id)
+   end
+ 
++  it 'renders unused profile metadata fields hidden in the initial response' do
++    visit settings_profile_path
++
++    expect(page)
++      .to have_css(profile_metadata_field_row, count: 1)
++  end
++
++  it 'progressively reveals profile metadata fields', :js do
++    visit settings_profile_path
++
++    expect(page)
++      .to have_css(profile_metadata_field_row, count: 1)
++
++    account_field_labels.first.fill_in with: 'Personal Website'
++
++    expect(page)
++      .to have_css(profile_metadata_field_row, count: 2)
++
++    account_field_values[1].fill_in with: 'https://host.example/personal'
++
++    expect(page)
++      .to have_css(profile_metadata_field_row, count: 3)
++  end
++
++  it 'shows saved profile metadata fields followed by one blank field', :js do
++    account.update!(
++      fields: [
++        { 'name' => 'Personal Website', 'value' => 'https://host.example/personal' },
++        { 'name' => 'Professional Biography', 'value' => 'https://host.example/pro' },
++      ]
++    )
++
++    visit settings_profile_path
++
++    expect(page)
++      .to have_css(profile_metadata_field_row, count: 3)
++    expect(account_field_labels.map(&:value))
++      .to eq(['Personal Website', 'Professional Biography', ''])
++    expect(account_field_values.map(&:value))
++      .to eq(['https://host.example/personal', 'https://host.example/pro', ''])
++  end
++
+   def display_name_field
+     form_label('defaults.display_name')
+   end
+@@ -33,4 +75,16 @@ RSpec.describe 'Settings profile page' do
+   def avatar_field
+     form_label('defaults.avatar')
+   end
++
++  def profile_metadata_field_row
++    '.profile-metadata-fields__row'
++  end
++
++  def account_field_labels
++    page.all("#{profile_metadata_field_row} .account_fields_name input")
++  end
++
++  def account_field_values
++    page.all("#{profile_metadata_field_row} .account_fields_value input")
++  end
+ end

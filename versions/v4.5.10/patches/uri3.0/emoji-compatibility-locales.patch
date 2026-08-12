@@ -1,0 +1,26 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Mon, 25 May 2026 10:52:12 +0900
+Subject: [PATCH] Add custom localisation
+
+
+diff --git a/config/locales/custom/emoji-compatibility/en.yml b/config/locales/custom/emoji-compatibility/en.yml
+new file mode 100644
+index 0000000000..66ad6510a1
+--- /dev/null
++++ b/config/locales/custom/emoji-compatibility/en.yml
+@@ -0,0 +1,4 @@
++en:
++  admin:
++    custom_emojis:
++      shortcode_hint: Only alphanumeric characters, underscores, and hyphens
+diff --git a/config/locales/custom/emoji-compatibility/ko.yml b/config/locales/custom/emoji-compatibility/ko.yml
+new file mode 100644
+index 0000000000..d793b2bc64
+--- /dev/null
++++ b/config/locales/custom/emoji-compatibility/ko.yml
+@@ -0,0 +1,4 @@
++ko:
++  admin:
++    custom_emojis:
++      shortcode_hint: 영숫자와 밑줄, 하이픈만 사용 가능

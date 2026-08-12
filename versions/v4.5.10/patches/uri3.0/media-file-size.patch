@@ -1,0 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Mon, 25 May 2026 16:22:17 +0900
+Subject: [PATCH] Increase media attachment file size limits
+
+- Double image size limit to 32 MB
+- Raise video size limit to 256 MB
+
+Rationale: These updates accommodate modern high-quality content standards and improve the user experience for creators while maintaining balanced storage constraints.
+
+diff --git a/app/models/media_attachment.rb b/app/models/media_attachment.rb
+index c40587748d..ecb876788c 100644
+--- a/app/models/media_attachment.rb
++++ b/app/models/media_attachment.rb
+@@ -40,8 +40,8 @@ class MediaAttachment < ApplicationRecord
+   MAX_DESCRIPTION_LENGTH = 1_500
+   MAX_DESCRIPTION_HARD_LENGTH_LIMIT = 10_000
+ 
+-  IMAGE_LIMIT = 16.megabytes
+-  VIDEO_LIMIT = 99.megabytes
++  IMAGE_LIMIT = 32.megabytes
++  VIDEO_LIMIT = 256.megabytes
+ 
+   MAX_VIDEO_MATRIX_LIMIT = 8_294_400 # 3840x2160px
+   MAX_VIDEO_FRAME_RATE   = 120

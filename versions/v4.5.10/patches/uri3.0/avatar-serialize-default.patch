@@ -1,0 +1,23 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Wed, 27 May 2026 14:56:50 +0900
+Subject: [PATCH] Always include icon field in actor serialisation
+
+- Remove the conditional check for avatar existence from icon association
+- Ensure consistent schema output for ActivityPub consumers
+
+Rationale: Including the property regardless of file presence improves schema reliability and offloads the handling of missing assets to the consuming services.
+
+diff --git a/app/serializers/activitypub/actor_serializer.rb b/app/serializers/activitypub/actor_serializer.rb
+index ed90fa428f..6cf0da7fc8 100644
+--- a/app/serializers/activitypub/actor_serializer.rb
++++ b/app/serializers/activitypub/actor_serializer.rb
+@@ -38,7 +38,7 @@ class ActivityPub::ActorSerializer < ActivityPub::Serializer
+ 
+   has_one :endpoints, serializer: EndpointsSerializer
+ 
+-  has_one :icon,  serializer: ActivityPub::ImageSerializer, if: :avatar_exists?
++  has_one :icon,  serializer: ActivityPub::ImageSerializer
+   has_one :image, serializer: ActivityPub::ImageSerializer, if: :header_exists?
+ 
+   delegate :suspended?, :instance_actor?, to: :object

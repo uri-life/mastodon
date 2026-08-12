@@ -1,0 +1,20 @@
+diff --git a/app/javascript/mastodon/reducers/compose.js b/app/javascript/mastodon/reducers/compose.js
+index d68ee5820d..dd53608652 100644
+--- a/app/javascript/mastodon/reducers/compose.js
++++ b/app/javascript/mastodon/reducers/compose.js
+@@ -10,14 +10,11 @@ import {
+   cancelPasteLinkCompose,
+ } from '@/mastodon/actions/compose_typed';
+ import { timelineDelete } from 'mastodon/actions/timelines_typed';
+-<<<<<<< HEAD
+-import { getNearestPollDuration } from 'mastodon/features/compose/util/poll_duration';
+-=======
+ import {
+   COMPOSE_INPUT_MODE_PLAIN,
+   isComposeInputMode,
+ } from 'mastodon/features/compose/input_modes';
+->>>>>>> Implement input mode selection in the compose form
++import { getNearestPollDuration } from 'mastodon/features/compose/util/poll_duration';
+ 
+ import {
+   COMPOSE_MOUNT,

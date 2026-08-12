@@ -1,0 +1,202 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Thu, 13 Aug 2026 00:09:20 +0900
+Subject: [PATCH] Adopt the Uri blue-grey branding palette
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Replace purple accents with cohesive blue tones
+- Add shared Uri colour scale variables
+- Align light and dark themes with the new palette
+- Update component links and browser theme metadata
+
+Rationale: Unifying the interface around Uri’s blue-grey branding creates a consistent visual identity across themes, controls, and platform-specific assets.
+
+diff --git a/app/javascript/styles/contrast/variables.scss b/app/javascript/styles/contrast/variables.scss
+index e057352ba3..b72ed99757 100644
+--- a/app/javascript/styles/contrast/variables.scss
++++ b/app/javascript/styles/contrast/variables.scss
+@@ -3,10 +3,10 @@
+ // Dependent colors
+ $black: #000;
+ 
+-$classic-base-color: hsl(240deg, 16%, 19%);
+-$classic-primary-color: hsl(240deg, 29%, 70%);
+-$classic-secondary-color: hsl(255deg, 25%, 88%);
+-$classic-highlight-color: hsl(240deg, 100%, 69%);
++$classic-base-color: hsl(210deg, 16%, 18%);
++$classic-primary-color: hsl(210deg, 29%, 65%);
++$classic-secondary-color: hsl(224deg, 25%, 84%);
++$classic-highlight-color: hsl(210deg, 47%, 60%);
+ 
+ $ui-base-color: $classic-base-color !default;
+ $ui-primary-color: $classic-primary-color !default;
+diff --git a/app/javascript/styles/mastodon-light/diff.scss b/app/javascript/styles/mastodon-light/diff.scss
+index 665271c535..46211e9666 100644
+--- a/app/javascript/styles/mastodon-light/diff.scss
++++ b/app/javascript/styles/mastodon-light/diff.scss
+@@ -102,7 +102,7 @@
+ 
+ // Change the background colors of statuses
+ .focusable:focus-visible {
+-  background: lighten($white, 4%);
++  background: lighten(hsl(210deg, 16%, 96%), 4%);
+ }
+ 
+ .account-gallery__item a {
+diff --git a/app/javascript/styles/mastodon-light/variables.scss b/app/javascript/styles/mastodon-light/variables.scss
+index a6a5e5556b..2b44ce4677 100644
+--- a/app/javascript/styles/mastodon-light/variables.scss
++++ b/app/javascript/styles/mastodon-light/variables.scss
+@@ -10,10 +10,11 @@ $white: #fff; // White
+ $blurple-500: #6364ff; // Brand purple
+ $grey-600: hsl(240deg, 8%, 33%); // Trout
+ $grey-100: hsl(240deg, 51%, 90%); // Topaz
++$uri-700: hsl(209deg, 46%, 55%);
+ 
+-$classic-base-color: hsl(240deg, 16%, 19%);
+-$classic-secondary-color: hsl(255deg, 25%, 88%);
+-$classic-highlight-color: $blurple-500;
++$classic-base-color: hsl(210deg, 16%, 18%);
++$classic-secondary-color: hsl(224deg, 25%, 84%);
++$classic-highlight-color: hsl(210deg, 47%, 60%);
+ 
+ @use '../mastodon/variables' with (
+   $success-green: color.adjust(
+@@ -24,23 +25,23 @@ $classic-highlight-color: $blurple-500;
+   $base-overlay-background: $white,
+ 
+   $ui-base-color: $classic-secondary-color,
+-  $ui-base-lighter-color: hsl(250deg, 24%, 75%),
++  $ui-base-lighter-color: hsl(219deg, 24%, 75%),
+   $ui-secondary-color: $classic-base-color,
+ 
+   $ui-button-secondary-color: $grey-600,
+   $ui-button-secondary-border-color: $grey-600,
+   $ui-button-secondary-focus-color: $white,
+-  $ui-button-tertiary-color: $blurple-500,
+-  $ui-button-tertiary-border-color: $blurple-500,
++  $ui-button-tertiary-color: $uri-700,
++  $ui-button-tertiary-border-color: $uri-700,
+ 
+   $primary-text-color: $black,
+   $darker-text-color: $classic-base-color,
+   $lighter-text-color: $classic-base-color,
+   $highlight-text-color: $classic-highlight-color,
+-  $dark-text-color: hsl(240deg, 16%, 32%),
+-  $light-text-color: hsl(240deg, 16%, 32%),
++  $dark-text-color: hsl(210deg, 16%, 32%),
++  $light-text-color: hsl(210deg, 16%, 32%),
+   $inverted-text-color: $black,
+ 
+-  $action-button-color: hsl(240deg, 16%, 45%),
++  $action-button-color: hsl(210deg, 16%, 45%),
+   $emojis-requiring-inversion: 'chains'
+ );
+diff --git a/app/javascript/styles/mastodon/_variables.scss b/app/javascript/styles/mastodon/_variables.scss
+index 816a9d9998..3ead9e658d 100644
+--- a/app/javascript/styles/mastodon/_variables.scss
++++ b/app/javascript/styles/mastodon/_variables.scss
+@@ -12,6 +12,10 @@ $blurple-400: #7477fd; // Medium slate blue
+ $blurple-300: #858afa; // Faded Blue
+ $grey-600: hsl(240deg, 8%, 33%); // Trout
+ $grey-100: hsl(240deg, 51%, 90%); // Topaz
++$uri-800: #4681ba;
++$uri-700: #598ec1;
++$uri-600: #6b9ac8;
++$uri-500: #7ea7cf;
+ 
+ $success-green: #79bd9a !default; // Padua
+ $error-red: $red-500 !default; // Cerise
+@@ -21,10 +25,10 @@ $gold-star: #ca8f04 !default; // Dark Goldenrod
+ $red-bookmark: $warning-red;
+ 
+ // Values from the classic Mastodon UI
+-$classic-base-color: hsl(240deg, 16%, 19%);
+-$classic-primary-color: hsl(240deg, 29%, 70%);
+-$classic-secondary-color: hsl(255deg, 25%, 88%);
+-$classic-highlight-color: $blurple-500;
++$classic-base-color: hsl(210deg, 16%, 18%);
++$classic-primary-color: hsl(210deg, 29%, 65%);
++$classic-secondary-color: hsl(224deg, 25%, 84%);
++$classic-highlight-color: $uri-700;
+ 
+ // Variables for defaults in UI
+ $base-shadow-color: $black !default;
+@@ -44,9 +48,9 @@ $ui-primary-color: $classic-primary-color !default; // Lighter
+ $ui-secondary-color: $classic-secondary-color !default; // Lightest
+ $ui-highlight-color: $classic-highlight-color !default;
+ $ui-button-color: $white !default;
+-$ui-button-background-color: $blurple-500 !default;
+-$ui-button-focus-background-color: $blurple-600 !default;
+-$ui-button-focus-outline-color: $blurple-400 !default;
++$ui-button-background-color: $uri-700 !default;
++$ui-button-focus-background-color: $uri-800 !default;
++$ui-button-focus-outline-color: $uri-600 !default;
+ $ui-button-focus-outline: solid 2px $ui-button-focus-outline-color !default;
+ 
+ $ui-button-disabled-color: color.adjust(
+@@ -54,14 +58,14 @@ $ui-button-disabled-color: color.adjust(
+   $alpha: -0.3
+ ) !default;
+ 
+-$ui-button-secondary-color: $blurple-500 !default;
+-$ui-button-secondary-border-color: $blurple-500 !default;
+-$ui-button-secondary-focus-border-color: $blurple-300 !default;
+-$ui-button-secondary-focus-color: $blurple-300 !default;
++$ui-button-secondary-color: $uri-700 !default;
++$ui-button-secondary-border-color: $uri-700 !default;
++$ui-button-secondary-focus-border-color: $uri-500 !default;
++$ui-button-secondary-focus-color: $uri-500 !default;
+ 
+-$ui-button-tertiary-color: $blurple-300 !default;
+-$ui-button-tertiary-border-color: $blurple-300 !default;
+-$ui-button-tertiary-focus-background-color: $blurple-600 !default;
++$ui-button-tertiary-color: $uri-500 !default;
++$ui-button-tertiary-border-color: $uri-500 !default;
++$ui-button-tertiary-focus-background-color: $uri-800 !default;
+ $ui-button-tertiary-focus-color: $white !default;
+ 
+ $ui-button-destructive-background-color: $red-500 !default;
+diff --git a/app/javascript/styles/mastodon/components.scss b/app/javascript/styles/mastodon/components.scss
+index 57bd22007e..d4cf795536 100644
+--- a/app/javascript/styles/mastodon/components.scss
++++ b/app/javascript/styles/mastodon/components.scss
+@@ -10487,7 +10487,7 @@ noscript {
+   background: transparent;
+   text-transform: uppercase;
+   cursor: pointer;
+-  color: $blurple-300;
++  color: $uri-500;
+   font-weight: 700;
+   border-radius: 4px;
+   padding: 0 4px;
+diff --git a/app/lib/themes.rb b/app/lib/themes.rb
+index 8b68c92e45..e953b7e359 100644
+--- a/app/lib/themes.rb
++++ b/app/lib/themes.rb
+@@ -7,8 +7,8 @@ class Themes
+   include Singleton
+ 
+   THEME_COLORS = {
+-    dark: '#181820',
+-    light: '#ffffff',
++    dark: '#15191e',
++    light: '#f3f5f6',
+   }.freeze
+ 
+   def initialize
+diff --git a/app/views/layouts/application.html.haml b/app/views/layouts/application.html.haml
+index 3418f6d953..0529722ba1 100755
+--- a/app/views/layouts/application.html.haml
++++ b/app/views/layouts/application.html.haml
+@@ -18,7 +18,7 @@
+       %link{ rel: 'apple-touch-icon', sizes: "#{size}x#{size}", href: app_icon_path(size.to_i) || frontend_asset_path("icons/apple-touch-icon-#{size}x#{size}.png") }/
+ 
+     - if use_mask_icon?
+-      %link{ rel: 'mask-icon', href: frontend_asset_path('images/logo-symbol-icon.svg'), color: '#6364FF' }/
++      %link{ rel: 'mask-icon', href: frontend_asset_path('images/logo-symbol-icon.svg'), color: '#7ea7cf' }/
+     %link{ rel: 'manifest', href: manifest_path(format: :json) }/
+     = theme_color_tags current_theme
+     %meta{ name: 'mobile-web-app-capable', content: 'yes' }/

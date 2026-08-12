@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Wed, 12 Aug 2026 10:30:01 +0900
+Subject: [PATCH] Add GitHub Copilot configuration instructions
+
+- Create .github/copilot-instructions.md file
+- Mandate environment checks for dev container status
+- Prioritise reading onboarding documents in containerised setups
+- Standardise instructions for local development and test commands
+
+Rationale: Providing project-specific context and workflow guidelines ensures that AI assistance remains aligned with our established development practices and environment requirements.
+
+Co-authored-by: Copilot <copilot@github.com>
+
+diff --git a/AGENTS.md b/AGENTS.md
+new file mode 100644
+index 0000000000..648f9120c6
+--- /dev/null
++++ b/AGENTS.md
+@@ -0,0 +1,11 @@
++# Uri-flavoured Mastodon — Agent Instructions
++
++## Dev Container
++
++**REQUIRED STEP:** At the start of every session, confirm whether you are running inside a dev container (check for `/.dockerenv`). If you are, read `.devcontainer/welcome-message.txt` and apply any relevant guidance from it before proceeding.
++
++### Environment Summary (from welcome-message.txt)
++
++- **Start the application:** `bin/dev`
++- **Run the test suite:** `RAILS_ENV=test bin/rails assets:precompile && RAILS_ENV=test bin/rspec`
++- All required software is pre-installed in the container.

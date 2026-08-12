@@ -1,0 +1,196 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Mon, 25 May 2026 10:09:23 +0900
+Subject: [PATCH] Update custom emoji validation and constraints
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Permit hyphens in custom emoji shortcodes
+- Adjust shortcode length limits to 1–256 characters
+- Increase custom emoji file size limit to 1 MB
+- Standardise regex patterns for boundary detection
+- Expand test coverage for new syntax and edge cases
+
+Rationale: Relaxing these constraints enables more flexible emoji naming while standardising validation logic across both the Ruby backend and TypeScript frontend components.
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+
+diff --git a/app/javascript/mastodon/features/emoji/render.test.ts b/app/javascript/mastodon/features/emoji/render.test.ts
+index af7ff75a02..148e7cb69b 100644
+--- a/app/javascript/mastodon/features/emoji/render.test.ts
++++ b/app/javascript/mastodon/features/emoji/render.test.ts
+@@ -41,12 +41,12 @@ describe('tokenizeText', () => {
+     ]);
+   });
+ 
+-  test('handles custom emoji with underscores and numbers', () => {
+-    expect(tokenizeText('Hello :smile_123:!!')).toEqual([
++  test('handles custom emoji with underscores, hyphens, and numbers', () => {
++    expect(tokenizeText('Hello :smile_123-456:!!')).toEqual([
+       'Hello ',
+       {
+         type: 'custom',
+-        code: ':smile_123:',
++        code: ':smile_123-456:',
+       },
+       '!!',
+     ]);
+@@ -69,8 +69,8 @@ describe('tokenizeText', () => {
+   });
+ 
+   test('does not capture custom emoji with invalid characters', () => {
+-    expect(tokenizeText('Hello :smile-123:!!')).toEqual([
+-      'Hello :smile-123:!!',
++    expect(tokenizeText('Hello :smile~123:!!')).toEqual([
++      'Hello :smile~123:!!',
+     ]);
+   });
+ });
+diff --git a/app/javascript/mastodon/features/emoji/utils.test.ts b/app/javascript/mastodon/features/emoji/utils.test.ts
+index 3844c814a1..ee7ba272c5 100644
+--- a/app/javascript/mastodon/features/emoji/utils.test.ts
++++ b/app/javascript/mastodon/features/emoji/utils.test.ts
+@@ -18,6 +18,8 @@ describe('isCustomEmoji', () => {
+   test.concurrent.for([
+     [':smile:', true],
+     [':smile_123:', true],
++    [':smile-123:', true],
++    [':smile_123-456:', true],
+     [':SMILE:', true],
+     ['😊', false],
+     ['foo', false],
+diff --git a/app/javascript/mastodon/features/emoji/utils.ts b/app/javascript/mastodon/features/emoji/utils.ts
+index c567afc2cc..bbd6b78e31 100644
+--- a/app/javascript/mastodon/features/emoji/utils.ts
++++ b/app/javascript/mastodon/features/emoji/utils.ts
+@@ -29,7 +29,7 @@ export function stringHasUnicodeFlags(input: string): boolean {
+ }
+ 
+ // Constant as this is supported by all browsers.
+-const CUSTOM_EMOJI_REGEX = /:([a-z0-9_]+):/i;
++const CUSTOM_EMOJI_REGEX = /:([a-z0-9_\u002D]+):/i;
+ // Use the polyfill regex or the Unicode property escapes if supported.
+ const EMOJI_REGEX = emojiRegexPolyfill?.source ?? '\\p{RGI_Emoji}';
+ 
+diff --git a/app/lib/emoji_formatter.rb b/app/lib/emoji_formatter.rb
+index c193df9bb6..2f1cd1f72a 100644
+--- a/app/lib/emoji_formatter.rb
++++ b/app/lib/emoji_formatter.rb
+@@ -3,7 +3,7 @@
+ class EmojiFormatter
+   include RoutingHelper
+ 
+-  DISALLOWED_BOUNDING_REGEX = /[[:alnum:]:]/
++  DISALLOWED_BOUNDING_REGEX = /[0-9A-Za-z_]/
+ 
+   attr_reader :html, :custom_emojis, :options
+ 
+diff --git a/app/models/custom_emoji.rb b/app/models/custom_emoji.rb
+index a38e042c61..00c9fc8f66 100644
+--- a/app/models/custom_emoji.rb
++++ b/app/models/custom_emoji.rb
+@@ -24,16 +24,16 @@
+ class CustomEmoji < ApplicationRecord
+   include Attachmentable
+ 
+-  LIMIT = 256.kilobytes
+-  MINIMUM_SHORTCODE_SIZE = 2
+-  MAX_SHORTCODE_SIZE = 128
++  LIMIT = 1.megabyte
++  MINIMUM_SHORTCODE_SIZE = 1
++  MAX_SHORTCODE_SIZE = 256
+   MAX_FEDERATED_SHORTCODE_SIZE = 2048
+ 
+-  SHORTCODE_RE_FRAGMENT = '[a-zA-Z0-9_]{2,}'
++  SHORTCODE_RE_FRAGMENT = '[0-9A-Za-z_-]+'
+ 
+-  SCAN_RE = /(?<=[^[:alnum:]:]|\n|^)
++  SCAN_RE = /(?<=[^0-9A-Za-z_]|\n|^)
+     :(#{SHORTCODE_RE_FRAGMENT}):
+-    (?=[^[:alnum:]:]|$)/x
++    (?=[^0-9A-Za-z_]|$)/x
+   SHORTCODE_ONLY_RE = /\A#{SHORTCODE_RE_FRAGMENT}\z/
+ 
+   IMAGE_MIME_TYPES = %w(image/png image/gif image/webp).freeze
+diff --git a/spec/lib/emoji_formatter_spec.rb b/spec/lib/emoji_formatter_spec.rb
+index e5accfbb0c..fc9515138d 100644
+--- a/spec/lib/emoji_formatter_spec.rb
++++ b/spec/lib/emoji_formatter_spec.rb
+@@ -9,6 +9,10 @@ RSpec.describe EmojiFormatter do
+     TextFormatter.new(str).to_s
+   end
+ 
++  def emoji_tag_regex(shortcode)
++    /<img rel="emoji" draggable="false" width="16" height="16" class="emojione custom-emoji" alt=":#{Regexp.escape(shortcode)}:"/
++  end
++
+   describe '#to_s' do
+     subject { described_class.new(text, emojis).to_s }
+ 
+@@ -26,7 +30,7 @@ RSpec.describe EmojiFormatter do
+       let(:text) { preformat_text(':coolcat: Beep boop') }
+ 
+       it 'converts the shortcode to an image tag' do
+-        expect(subject).to match(/<img rel="emoji" draggable="false" width="16" height="16" class="emojione custom-emoji" alt=":coolcat:"/)
++        expect(subject).to match(emoji_tag_regex('coolcat'))
+       end
+     end
+ 
+@@ -34,15 +38,32 @@ RSpec.describe EmojiFormatter do
+       let(:text) { preformat_text('Beep :coolcat: boop') }
+ 
+       it 'converts the shortcode to an image tag' do
+-        expect(subject).to match(/Beep <img rel="emoji" draggable="false" width="16" height="16" class="emojione custom-emoji" alt=":coolcat:"/)
++        expect(subject).to match(/Beep #{emoji_tag_regex('coolcat')}/)
+       end
+     end
+ 
+     context 'when given text with concatenated emoji shortcodes' do
+       let(:text) { preformat_text(':coolcat::coolcat:') }
+ 
+-      it 'does not touch the shortcodes' do
+-        expect(subject).to match(/:coolcat::coolcat:/)
++      it 'converts both shortcodes to image tags' do
++        expect(subject.scan(emoji_tag_regex('coolcat')).size).to eq(2)
++      end
++    end
++
++    context 'when given text with a hyphenated emoji shortcode' do
++      let!(:emoji) { Fabricate(:custom_emoji, shortcode: 'cool-cat') }
++      let(:text) { preformat_text(':cool-cat: Beep boop') }
++
++      it 'converts the shortcode to an image tag' do
++        expect(subject).to match(emoji_tag_regex('cool-cat'))
++      end
++    end
++
++    context 'when given text with an emoji shortcode bounded by underscores' do
++      let(:text) { preformat_text('Beep_:coolcat:_boop') }
++
++      it 'does not touch the shortcode' do
++        expect(subject).to include('Beep_:coolcat:_boop')
+       end
+     end
+ 
+@@ -50,7 +71,7 @@ RSpec.describe EmojiFormatter do
+       let(:text) { preformat_text('Beep boop :coolcat:') }
+ 
+       it 'converts the shortcode to an image tag' do
+-        expect(subject).to match(/boop <img rel="emoji" draggable="false" width="16" height="16" class="emojione custom-emoji" alt=":coolcat:"/)
++        expect(subject).to match(/boop #{emoji_tag_regex('coolcat')}/)
+       end
+     end
+   end
+diff --git a/spec/models/custom_emoji_spec.rb b/spec/models/custom_emoji_spec.rb
+index 244d0d126f..83acc2286c 100644
+--- a/spec/models/custom_emoji_spec.rb
++++ b/spec/models/custom_emoji_spec.rb
+@@ -92,6 +92,6 @@ RSpec.describe CustomEmoji, :attachment_processing do
+     it { is_expected.to validate_uniqueness_of(:shortcode).scoped_to(:domain) }
+     it { is_expected.to validate_length_of(:shortcode).is_at_least(described_class::MINIMUM_SHORTCODE_SIZE) }
+     it { is_expected.to allow_values('cats').for(:shortcode) }
+-    it { is_expected.to_not allow_values('@#$@#$', 'X').for(:shortcode) }
++    it { is_expected.to_not allow_values('@#$@#$').for(:shortcode) }
+   end
+ end

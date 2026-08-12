@@ -1,0 +1,42 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Mon, 25 May 2026 08:35:31 +0900
+Subject: [PATCH] Configure application time zone via environment variable
+
+- Update config/application.rb to read DEFAULT_TIME_ZONE from environment
+- Apply custom time zone only if the environment variable is present
+- Document the new configuration option in .env.production.sample
+
+Rationale: Allowing administrators to define the application time zone via environment variables improves flexibility for deployment across different regions without requiring code changes.
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+
+diff --git a/.env.production.sample b/.env.production.sample
+index 9ff63c49ef..ade2bccc07 100644
+--- a/.env.production.sample
++++ b/.env.production.sample
+@@ -16,6 +16,12 @@
+ # ----------
+ LOCAL_DOMAIN=example.com
+ 
++# Localization
++# ------------
++# Set this to override the Rails application time zone. Leave unset to keep the
++# Rails default.
++# DEFAULT_TIME_ZONE=
++
+ # Redis
+ # -----
+ REDIS_HOST=localhost
+diff --git a/config/application.rb b/config/application.rb
+index 90cfe47428..eb6cb5417a 100644
+--- a/config/application.rb
++++ b/config/application.rb
+@@ -73,6 +73,7 @@ module Mastodon
+     # in config/environments, which are processed later.
+     #
+     # config.time_zone = "Central Time (US & Canada)"
++    config.time_zone = ENV['DEFAULT_TIME_ZONE'] if ENV.key?('DEFAULT_TIME_ZONE')
+     # config.eager_load_paths << Rails.root.join("extras")
+ 
+     # config.paths.add File.join('app', 'api'), glob: File.join('**', '*.rb')

@@ -1,0 +1,68 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Sun, 24 May 2026 17:07:20 +0900
+Subject: [PATCH 1/2] Update Yarn signing key in Dockerfile
+
+- Install the latest Yarn package signing key into the system keyring
+- Ensure repository verification succeeds during apt-get operations
+
+Rationale: The previous GPG key has expired or become invalid, causing package installation failures; updating the key restores the integrity of the development environment's dependency management.
+
+Co-authored-by: Copilot <copilot@github.com>
+
+diff --git a/.devcontainer/Dockerfile b/.devcontainer/Dockerfile
+index 3aa0bbf7da..46673f769e 100644
+--- a/.devcontainer/Dockerfile
++++ b/.devcontainer/Dockerfile
+@@ -6,6 +6,10 @@ WORKDIR /app
+ COPY .nvmrc .
+ RUN /bin/bash --login -i -c "nvm install"
+ 
++# Refresh Yarn's APT signing key before apt-get update.
++RUN curl -fsSL https://dl.yarnpkg.com/debian/pubkey.gpg | \
++    gpg --dearmor --yes -o /usr/share/keyrings/yarn-archive-keyring.gpg
++
+ # Install additional OS packages
+ RUN apt-get update && \
+     export DEBIAN_FRONTEND=noninteractive && \
+diff --git a/.devcontainer/devcontainer-lock.json b/.devcontainer/devcontainer-lock.json
+new file mode 100644
+index 0000000000..4ae31f2169
+--- /dev/null
++++ b/.devcontainer/devcontainer-lock.json
+@@ -0,0 +1,9 @@
++{
++  "features": {
++    "ghcr.io/devcontainers/features/sshd:1": {
++      "version": "1.1.0",
++      "resolved": "ghcr.io/devcontainers/features/sshd@sha256:f5251b8e4325f68f7280973c6cd65daff414449c66f240621502d4e8e74eb7ee",
++      "integrity": "sha256:f5251b8e4325f68f7280973c6cd65daff414449c66f240621502d4e8e74eb7ee"
++    }
++  }
++}
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Wed, 27 May 2026 11:47:19 +0900
+Subject: [PATCH 2/2] Install librsvg2-bin in dev container
+
+- Include librsvg2-bin in the Dockerfile package list
+- Enable command-line support for processing SVG files
+
+Rationale: Adding this package ensures that tools reliant on SVG conversion function correctly during development and build processes within the containerised environment.
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+
+diff --git a/.devcontainer/Dockerfile b/.devcontainer/Dockerfile
+index 46673f769e..3b5a5f05de 100644
+--- a/.devcontainer/Dockerfile
++++ b/.devcontainer/Dockerfile
+@@ -13,7 +13,7 @@ RUN curl -fsSL https://dl.yarnpkg.com/debian/pubkey.gpg | \
+ # Install additional OS packages
+ RUN apt-get update && \
+     export DEBIAN_FRONTEND=noninteractive && \
+-    apt-get -y install --no-install-recommends libicu-dev libidn11-dev ffmpeg imagemagick libvips42 libpam-dev
++    apt-get -y install --no-install-recommends libicu-dev libidn11-dev ffmpeg imagemagick libvips42 libpam-dev librsvg2-bin
+ 
+ # Disable download prompt for Corepack
+ ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0

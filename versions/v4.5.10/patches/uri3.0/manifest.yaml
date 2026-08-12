@@ -1,0 +1,196 @@
+features:
+  about:
+    name: About
+    description: |
+      Mastodon 서버에 대한 정보를 표시하는 페이지를 커스터마이즈합니다.
+    dev-dependencies:
+      - devcontainer
+  api-limits:
+    name: API Limits
+    description: |
+      API 요청 제한을 커스터마이즈합니다.
+    dev-dependencies:
+      - devcontainer
+  avatar-serialize-default:
+    name: Avatar - Serialize Default
+    description: |
+      기본 아바타를 직렬화하여 API 응답에 포함하도록 합니다.
+    dev-dependencies:
+      - devcontainer
+  blurhash:
+    name: Blurhash
+    description: |
+      Blurhash 옵션을 커스터마이즈합니다.
+    dev-dependencies:
+      - devcontainer
+  branding-assets:
+    name: Branding Assets
+    description: |
+      우리.인생 고유의 브랜딩 자산을 적용합니다.
+    dev-dependencies:
+      - devcontainer
+  branding-theme:
+    name: Branding Theme
+    description: |
+      우리.인생 고유의 브랜딩 테마를 적용합니다.
+    dependencies:
+      - branding-assets
+  composer-mode:
+    name: Composer Mode
+    description: |
+      게시물 작성 시, 작성 모드를 선택할 수 있도록 합니다.
+    dependencies:
+      - custom-locales
+  composer-mode-markdown:
+    name: Composer Mode - Markdown
+    description: |
+      Markdown 형식으로 게시물을 작성할 수 있도록 합니다.
+    dependencies:
+      - composer-mode
+  corner-radius:
+    name: Corner Radius
+    description: |
+      UI 요소의 모서리 둥글기를 커스터마이즈합니다.
+    dependencies:
+      - composer-mode-markdown
+      - emoji-reaction
+  custom-locales:
+    name: Custom Locales
+    description: |
+      사용자 정의 언어 파일을 지원할 수 있도록 합니다.
+    dev-dependencies:
+      - devcontainer
+  devcontainer:
+    name: Dev Container
+    description: |
+      개발 컨테이너 오류를 수정합니다.
+    dev-dependencies:
+      - llm-instructions
+  emoji-auto-width:
+    name: Emoji - Auto Width
+    description: |
+      에모지의 너비를 자동으로 조정하도록 합니다.
+    dev-dependencies:
+      - devcontainer
+  emoji-compatibility:
+    name: Emoji Compatibility
+    description: |
+      Misskey와의 커스텀 에모지 호환성을 개선합니다.
+    dev-dependencies:
+      - devcontainer
+  emoji-compatibility-locales:
+    name: Emoji Compatibility - Locales
+    description: |
+      emoji-compatibility 기능에 필요한 언어 파일을 추가합니다.
+    dependencies:
+      - custom-locales
+      - emoji-compatibility
+  emoji-reaction:
+    name: Emoji Reaction
+    description: |
+      게시물에 에모지 리액션 기능을 추가합니다.
+    dependencies:
+      - custom-locales
+  emoji-reaction+emoji-auto-width:
+    name: Emoji Size
+    description: |
+      에모지 리액션 기능을 위한 에모지 너비 자동 조정 기능을 추가합니다.
+    dependencies:
+      - emoji-auto-width
+      - emoji-reaction
+  font-pretendard:
+    name: Font - Pretendard
+    description: |
+      시스템 폰트를 Pretendard로 변경합니다.
+    dev-dependencies:
+      - devcontainer
+  hashtag-allow-numeric-only:
+    name: Hashtag - Allow Numeric Only
+    description: |
+      숫자만으로 이루어진 해시태그를 허용하도록 합니다.
+    dev-dependencies:
+      - devcontainer
+  hashtag-color-preview:
+    name: Hashtag - Color Preview
+    description: |
+      색상 코드 형태를 한 해시태그에서 색상 미리보기를 표시하도록 합니다.
+    dependencies:
+      - hashtag-allow-numeric-only
+  llm-instructions:
+    name: LLM Instructions
+    description: |
+      AI Agent가 사용할 수 있는 시스템 지침을 추가합니다.
+  media-file-size:
+    name: Media File Size
+    description: |
+      미디어 파일 크기 제한을 커스터마이즈합니다.
+    dev-dependencies:
+      - devcontainer
+  media-fix-webm:
+    name: Media Fix - WebM
+    description: |
+      WebM 형식의 미디어 파일이 제대로 처리되지 않는 문제를 수정합니다.
+    dev-dependencies:
+      - devcontainer
+  media-format:
+    name: Media Format
+    description: |
+      미디어의 형식을 커스터마이즈합니다.
+    dev-dependencies:
+      - devcontainer
+  ocr:
+    name: OCR
+    description: |
+      Tesseract OCR에 한국어 학습 데이터를 추가하고 영어 학습 데이터를 갱신합니다.
+    dev-dependencies:
+      - devcontainer
+  poll:
+    name: Poll
+    description: |
+      투표 기능을 커스터마이즈합니다.
+    dev-dependencies:
+      - devcontainer
+  profile-limits:
+    name: Profile Limits
+    description: |
+      프로필의 최대 길이를 커스터마이즈합니다.
+    dev-dependencies:
+      - devcontainer
+  pull-mastodon-34818:
+    name: Pull mastodon/mastodon#34818
+    description: |
+      mastodon/mastodon#34818 끌어오기를 적용합니다.
+  remove-get-app:
+    name: Remove "Get the app" Link
+    description: |
+      "앱 다운로드하기" 링크를 제거합니다.
+    dev-dependencies:
+      - devcontainer
+  remove-server-hero-image:
+    name: Remove Server Hero Image
+    description: |
+      서버 히어로 이미지를 제거합니다.
+    dev-dependencies:
+      - devcontainer
+  revert-mastodon-26396:
+    name: Revert mastodon/mastodon#26396
+    description: |
+      mastodon/mastodon#26396 끌어오기를 되돌립니다.
+  status-language-name:
+    name: Status Language Name
+    description: |
+      게시물의 언어 이름을 표시하도록 합니다.
+    dev-dependencies:
+      - devcontainer
+  status-length:
+    name: Status Length
+    description: |
+      게시물의 최대 길이를 커스터마이즈합니다.
+    dev-dependencies:
+      - devcontainer
+  timezone:
+    name: Timezone
+    description: |
+      타임존을 환경 변수로 설정할 수 있도록 합니다.
+    dev-dependencies:
+      - devcontainer

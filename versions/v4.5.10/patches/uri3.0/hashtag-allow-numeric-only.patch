@@ -1,0 +1,93 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Tue, 26 May 2026 16:44:28 +0900
+Subject: [PATCH] Allow hashtags consisting purely of digits
+
+- Update regular expression logic to permit numeric-only tags
+- Replace alphabetic requirements with alphanumeric patterns in Ruby and TypeScript
+- Add test cases verifying validity of purely numeric hashtags
+- Ensure consistent hashtag parsing across backend and frontend
+
+Rationale: The system previously restricted hashtags to require at least one alphabetic character; enabling purely numeric tags improves flexibility and aligns with common expectations for hashtagging functionality.
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+
+diff --git a/app/javascript/mastodon/utils/hashtags.ts b/app/javascript/mastodon/utils/hashtags.ts
+index 0c5505c6c9..c5965ac8de 100644
+--- a/app/javascript/mastodon/utils/hashtags.ts
++++ b/app/javascript/mastodon/utils/hashtags.ts
+@@ -1,26 +1,26 @@
+ const HASHTAG_SEPARATORS = '_\\u00b7\\u200c';
+-const ALPHA = '\\p{L}\\p{M}';
++const ALNUM = '\\p{L}\\p{M}\\p{N}';
+ const WORD = '\\p{L}\\p{M}\\p{N}\\p{Pc}';
+ 
+ const buildHashtagPatternRegex = () => {
+   try {
+     return new RegExp(
+-      `(?:^|[^\\/\\)\\w])#(([${WORD}_][${WORD}${HASHTAG_SEPARATORS}]*[${ALPHA}${HASHTAG_SEPARATORS}][${WORD}${HASHTAG_SEPARATORS}]*[${WORD}_])|([${WORD}_]*[${ALPHA}][${WORD}_]*))`,
++      `(?:^|[^\\/\\)\\w])#(([${WORD}_][${WORD}${HASHTAG_SEPARATORS}]*[${ALNUM}${HASHTAG_SEPARATORS}][${WORD}${HASHTAG_SEPARATORS}]*[${WORD}_])|([${WORD}_]*[${ALNUM}][${WORD}_]*))`,
+       'iu',
+     );
+   } catch {
+-    return /(?:^|[^/)\w])#(\w*[a-zA-Z·]\w*)/i;
++    return /(?:^|[^/)\w])#(\w*[a-zA-Z0-9·]\w*)/i;
+   }
+ };
+ 
+ const buildHashtagRegex = () => {
+   try {
+     return new RegExp(
+-      `^(([${WORD}_][${WORD}${HASHTAG_SEPARATORS}]*[${ALPHA}${HASHTAG_SEPARATORS}][${WORD}${HASHTAG_SEPARATORS}]*[${WORD}_])|([${WORD}_]*[${ALPHA}][${WORD}_]*))$`,
++      `^(([${WORD}_][${WORD}${HASHTAG_SEPARATORS}]*[${ALNUM}${HASHTAG_SEPARATORS}][${WORD}${HASHTAG_SEPARATORS}]*[${WORD}_])|([${WORD}_]*[${ALNUM}][${WORD}_]*))$`,
+       'iu',
+     );
+   } catch {
+-    return /^(\w*[a-zA-Z·]\w*)$/i;
++    return /^(\w*[a-zA-Z0-9·]\w*)$/i;
+   }
+ };
+ 
+diff --git a/app/models/tag.rb b/app/models/tag.rb
+index f9eb6bfd33..dc3dc33cc3 100644
+--- a/app/models/tag.rb
++++ b/app/models/tag.rb
+@@ -35,10 +35,10 @@ class Tag < ApplicationRecord
+   has_one :trend, class_name: 'TagTrend', inverse_of: :tag, dependent: :destroy
+ 
+   HASHTAG_SEPARATORS = "_\u00B7\u30FB\u200c"
+-  HASHTAG_FIRST_SEQUENCE_CHUNK_ONE = "[[:word:]_][[:word:]#{HASHTAG_SEPARATORS}]*[[:alpha:]#{HASHTAG_SEPARATORS}]".freeze
++  HASHTAG_FIRST_SEQUENCE_CHUNK_ONE = "[[:word:]_][[:word:]#{HASHTAG_SEPARATORS}]*[[:alnum:]#{HASHTAG_SEPARATORS}]".freeze
+   HASHTAG_FIRST_SEQUENCE_CHUNK_TWO = "[[:word:]#{HASHTAG_SEPARATORS}]*[[:word:]_]".freeze
+   HASHTAG_FIRST_SEQUENCE = "(#{HASHTAG_FIRST_SEQUENCE_CHUNK_ONE}#{HASHTAG_FIRST_SEQUENCE_CHUNK_TWO})".freeze
+-  HASHTAG_LAST_SEQUENCE = '([[:word:]_]*[[:alpha:]][[:word:]_]*)'
++  HASHTAG_LAST_SEQUENCE = '([[:word:]_]*[[:alnum:]][[:word:]_]*)'
+   HASHTAG_NAME_PAT = "#{HASHTAG_FIRST_SEQUENCE}|#{HASHTAG_LAST_SEQUENCE}".freeze
+ 
+   HASHTAG_RE = %r{(?<![=/)\p{Alnum}])[#＃](#{HASHTAG_NAME_PAT})}
+diff --git a/spec/models/tag_spec.rb b/spec/models/tag_spec.rb
+index d41d3a9e21..c9db0c8caf 100644
+--- a/spec/models/tag_spec.rb
++++ b/spec/models/tag_spec.rb
+@@ -52,6 +52,10 @@ RSpec.describe Tag do
+       expect(described_class.new(name: 'hello world')).to_not be_valid
+     end
+ 
++    it 'valid with digits only' do
++      expect(described_class.new(name: '0123456')).to be_valid
++    end
++
+     it 'valid with ａｅｓｔｈｅｔｉｃ' do
+       expect(described_class.new(name: 'ａｅｓｔｈｅｔｉｃ')).to be_valid
+     end
+@@ -132,8 +136,8 @@ RSpec.describe Tag do
+       expect(subject.match('hello #one·two·three·').to_s).to eq '#one·two·three'
+     end
+ 
+-    it 'does not match purely-numeric hashtags' do
+-      expect(subject.match('hello #0123456')).to be_nil
++    it 'matches purely-numeric hashtags' do
++      expect(subject.match('hello #0123456').to_s).to eq '#0123456'
+     end
+ 
+     it 'matches hashtags immediately following the letter ß' do
