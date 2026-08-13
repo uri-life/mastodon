@@ -1,0 +1,12 @@
+inherits: uri3.1
+
+excludes:
+  - remove-server-hero-image
+
+features:
+  corner-radius+remove-server-hero-image:
+    name: Remove Server Hero Image (Corner Radius)
+    description: |
+      서버 히어로 이미지를 제거합니다.
+    dependencies:
+      - corner-radius

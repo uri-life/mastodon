@@ -1,0 +1,659 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Sun, 24 May 2026 19:57:17 +0000
+Subject: [PATCH] Enable Markdown support for composing and rendering posts
+
+- Implement MarkdownFormatter using Redcarpet with strict sanitisation
+- Extend Status model and database schema to handle text/markdown
+- Update ActivityPub serializers and parsers for source content support
+- Integrate Markdown input mode into the web compose interface
+- Add locale strings for Markdown mode and associated UI icons
+- Include comprehensive test coverage for rendering and synchronisation
+
+Rationale: This update introduces native Markdown support, allowing users to format posts with standard syntax while ensuring interoperability across the Fediverse through consistent ActivityPub handling.
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+
+diff --git a/app/helpers/formatting_helper.rb b/app/helpers/formatting_helper.rb
+index 68aad4f677..f0e7c59ce0 100644
+--- a/app/helpers/formatting_helper.rb
++++ b/app/helpers/formatting_helper.rb
+@@ -29,7 +29,7 @@ module FormattingHelper
+   def status_content_format(status)
+     quoted_status = status.quote&.quoted_status if status.local?
+ 
+-    html_aware_format(status.text, status.local?, preloaded_accounts: [status.account] + (status.respond_to?(:active_mentions) ? status.active_mentions.map(&:account) : []), quoted_status: quoted_status)
++    html_aware_format(status.text, status.local?, preloaded_accounts: [status.account] + (status.respond_to?(:active_mentions) ? status.active_mentions.map(&:account) : []), quoted_status: quoted_status, content_type: status.effective_content_type)
+   end
+ 
+   def rss_status_content_format(status)
+diff --git a/app/javascript/mastodon/features/compose/components/input_mode_dropdown.tsx b/app/javascript/mastodon/features/compose/components/input_mode_dropdown.tsx
+index c0cffc252b..49f419ac62 100644
+--- a/app/javascript/mastodon/features/compose/components/input_mode_dropdown.tsx
++++ b/app/javascript/mastodon/features/compose/components/input_mode_dropdown.tsx
+@@ -8,11 +8,15 @@ import Overlay from 'react-overlays/Overlay';
+ import type { Placement, State } from 'react-overlays/usePopper';
+ 
+ import ArticleIcon from '@/material-icons/400-24px/article.svg?react';
++import CodeIcon from '@/material-icons/400-24px/code.svg?react';
+ import { changeComposeInputMode } from 'mastodon/actions/compose';
+ import type { SelectItem } from 'mastodon/components/dropdown_selector';
+ import { DropdownSelector } from 'mastodon/components/dropdown_selector';
+ import { Icon } from 'mastodon/components/icon';
+-import { COMPOSE_INPUT_MODE_PLAIN } from 'mastodon/features/compose/input_modes';
++import {
++  COMPOSE_INPUT_MODE_MARKDOWN,
++  COMPOSE_INPUT_MODE_PLAIN,
++} from 'mastodon/features/compose/input_modes';
+ import type { ComposeInputMode } from 'mastodon/features/compose/input_modes';
+ import { useAppDispatch, useAppSelector } from 'mastodon/store';
+ 
+@@ -29,6 +33,14 @@ const messages = defineMessages({
+     id: 'compose.input_mode.plain.description',
+     defaultMessage: 'Write your post as plain text',
+   },
++  markdown: {
++    id: 'compose.input_mode.markdown',
++    defaultMessage: 'Markdown',
++  },
++  markdownDescription: {
++    id: 'compose.input_mode.markdown.description',
++    defaultMessage: 'Write your post with Markdown formatting',
++  },
+ });
+ 
+ export const InputModeDropdown: React.FC = () => {
+@@ -52,6 +64,13 @@ export const InputModeDropdown: React.FC = () => {
+         text: intl.formatMessage(messages.plain),
+         meta: intl.formatMessage(messages.plainDescription),
+       },
++      {
++        icon: 'code',
++        iconComponent: CodeIcon,
++        value: COMPOSE_INPUT_MODE_MARKDOWN,
++        text: intl.formatMessage(messages.markdown),
++        meta: intl.formatMessage(messages.markdownDescription),
++      },
+     ],
+     [intl],
+   );
+diff --git a/app/javascript/mastodon/features/compose/input_modes.ts b/app/javascript/mastodon/features/compose/input_modes.ts
+index 1bae833ecf..93eecc01ef 100644
+--- a/app/javascript/mastodon/features/compose/input_modes.ts
++++ b/app/javascript/mastodon/features/compose/input_modes.ts
+@@ -1,10 +1,14 @@
+ export const COMPOSE_INPUT_MODE_PLAIN = 'plain';
++export const COMPOSE_INPUT_MODE_MARKDOWN = 'markdown';
+ 
+-export const COMPOSE_INPUT_MODE_OPTIONS = [COMPOSE_INPUT_MODE_PLAIN] as const;
++export const COMPOSE_INPUT_MODE_OPTIONS = [
++  COMPOSE_INPUT_MODE_PLAIN,
++  COMPOSE_INPUT_MODE_MARKDOWN,
++] as const;
+ 
+ export type ComposeInputMode = (typeof COMPOSE_INPUT_MODE_OPTIONS)[number];
+ 
+-export type ComposeContentType = 'text/plain';
++export type ComposeContentType = 'text/plain' | 'text/markdown';
+ 
+ export const isComposeInputMode = (value: string): value is ComposeInputMode =>
+   COMPOSE_INPUT_MODE_OPTIONS.includes(value as ComposeInputMode);
+@@ -13,6 +17,8 @@ export const composeInputModeFromContentType = (
+   contentType?: string | null,
+ ): ComposeInputMode => {
+   switch (contentType) {
++    case 'text/markdown':
++      return COMPOSE_INPUT_MODE_MARKDOWN;
+     case 'text/plain':
+     default:
+       return COMPOSE_INPUT_MODE_PLAIN;
+@@ -22,7 +28,10 @@ export const composeInputModeFromContentType = (
+ export const contentTypeFromComposeInputMode = (
+   inputMode: ComposeInputMode,
+ ): ComposeContentType | undefined => {
+-  void inputMode;
+-
+-  return undefined;
++  switch (inputMode) {
++    case COMPOSE_INPUT_MODE_MARKDOWN:
++      return 'text/markdown';
++    case COMPOSE_INPUT_MODE_PLAIN:
++      return undefined;
++  }
+ };
+diff --git a/app/javascript/mastodon/locales/custom/composer-mode/en.json b/app/javascript/mastodon/locales/custom/composer-mode/en.json
+index 7a5a9a0509..01321bdaba 100644
+--- a/app/javascript/mastodon/locales/custom/composer-mode/en.json
++++ b/app/javascript/mastodon/locales/custom/composer-mode/en.json
+@@ -1,5 +1,7 @@
+ {
+   "compose.input_mode.change": "Change input mode",
++  "compose.input_mode.markdown": "Markdown",
++  "compose.input_mode.markdown.description": "Write your post with Markdown formatting",
+   "compose.input_mode.plain": "Plain text",
+   "compose.input_mode.plain.description": "Write your post as plain text"
+ }
+diff --git a/app/javascript/mastodon/locales/custom/composer-mode/ko.json b/app/javascript/mastodon/locales/custom/composer-mode/ko.json
+index a1c48dc49f..cd4f93ed83 100644
+--- a/app/javascript/mastodon/locales/custom/composer-mode/ko.json
++++ b/app/javascript/mastodon/locales/custom/composer-mode/ko.json
+@@ -1,5 +1,7 @@
+ {
+   "compose.input_mode.change": "입력 모드 변경",
++  "compose.input_mode.markdown": "Markdown",
++  "compose.input_mode.markdown.description": "Markdown 서식으로 게시물을 작성합니다",
+   "compose.input_mode.plain": "평문",
+   "compose.input_mode.plain.description": "게시물을 평문으로 작성합니다"
+ }
+diff --git a/app/lib/activitypub/activity/create.rb b/app/lib/activitypub/activity/create.rb
+index 5dcef66b59..f52452071b 100644
+--- a/app/lib/activitypub/activity/create.rb
++++ b/app/lib/activitypub/activity/create.rb
+@@ -98,6 +98,7 @@ class ActivityPub::Activity::Create < ActivityPub::Activity
+       url: @status_parser.url || @status_parser.uri,
+       account: @account,
+       text: @status_parser.processed_text,
++      content_type: @status_parser.content_type,
+       language: @status_parser.language,
+       spoiler_text: @status_parser.processed_spoiler_text,
+       created_at: @status_parser.created_at,
+diff --git a/app/lib/activitypub/parser/status_parser.rb b/app/lib/activitypub/parser/status_parser.rb
+index 46722e0a12..d675c5e5a3 100644
+--- a/app/lib/activitypub/parser/status_parser.rb
++++ b/app/lib/activitypub/parser/status_parser.rb
+@@ -38,7 +38,9 @@ class ActivityPub::Parser::StatusParser
+   end
+ 
+   def text
+-    if @object['content'].present?
++    if markdown_source?
++      source['content']
++    elsif @object['content'].present?
+       @object['content']
+     elsif content_language_map?
+       @object['contentMap'].values.first
+@@ -135,6 +137,10 @@ class ActivityPub::Parser::StatusParser
+     flags
+   end
+ 
++  def content_type
++    Status::CONTENT_TYPE_MARKDOWN if markdown_source?
++  end
++
+   def quote?
+     %w(quote _misskey_quote quoteUrl quoteUri).any? { |key| @object[key].present? }
+   end
+@@ -216,4 +222,12 @@ class ActivityPub::Parser::StatusParser
+   def name_language_map?
+     @object['nameMap'].is_a?(Hash) && !@object['nameMap'].empty?
+   end
++
++  def source
++    @object['source'] if @object['source'].is_a?(Hash)
++  end
++
++  def markdown_source?
++    source&.dig('mediaType') == Status::CONTENT_TYPE_MARKDOWN && source['content'].is_a?(String)
++  end
+ end
+diff --git a/app/lib/html_aware_formatter.rb b/app/lib/html_aware_formatter.rb
+index 303e4a15e7..5c7e431bbc 100644
+--- a/app/lib/html_aware_formatter.rb
++++ b/app/lib/html_aware_formatter.rb
+@@ -15,7 +15,9 @@ class HtmlAwareFormatter
+   end
+ 
+   def to_s
+-    if local?
++    if markdown?
++      MarkdownFormatter.new(text, options).to_s
++    elsif local?
+       linkify
+     else
+       reformat.html_safe # rubocop:disable Rails/OutputSafety
+@@ -35,4 +37,8 @@ class HtmlAwareFormatter
+   def linkify
+     TextFormatter.new(text, options).to_s
+   end
++
++  def markdown?
++    options[:content_type] == Status::CONTENT_TYPE_MARKDOWN
++  end
+ end
+diff --git a/app/lib/markdown_formatter.rb b/app/lib/markdown_formatter.rb
+new file mode 100644
+index 0000000000..b9eff053d4
+--- /dev/null
++++ b/app/lib/markdown_formatter.rb
+@@ -0,0 +1,60 @@
++# frozen_string_literal: true
++
++class MarkdownFormatter
++  include RoutingHelper
++
++  SKIP_LINKIFY_ANCESTORS = %w(a code pre).freeze
++
++  attr_reader :text, :options
++
++  def initialize(text, options = {})
++    @text = text
++    @options = options
++  end
++
++  def to_s
++    html = text.blank? ? '' : linkify_text_nodes(sanitized_markdown)
++    html = add_quote_fallback(html) if options[:quoted_status].present?
++
++    html.html_safe # rubocop:disable Rails/OutputSafety
++  end
++
++  private
++
++  def sanitized_markdown
++    Sanitize.fragment(markdown.render(text), Sanitize::Config::MASTODON_STRICT)
++  end
++
++  def linkify_text_nodes(html)
++    fragment = Nokogiri::HTML5.fragment(html)
++
++    fragment.xpath('.//text()[normalize-space()]').each do |node|
++      next if node.ancestors.any? { |ancestor| SKIP_LINKIFY_ANCESTORS.include?(ancestor.name) }
++
++      node.replace(Nokogiri::HTML5.fragment(TextFormatter.new(node.text, options.merge(multiline: false)).to_s))
++    end
++
++    Sanitize.fragment(fragment.to_html, Sanitize::Config::MASTODON_STRICT)
++  end
++
++  def markdown
++    @markdown ||= Redcarpet::Markdown.new(
++      Redcarpet::Render::HTML.new(escape_html: true, no_images: true),
++      autolink: true,
++      fenced_code_blocks: true,
++      strikethrough: true,
++      tables: false
++    )
++  end
++
++  def add_quote_fallback(html)
++    return html if options[:quoted_status].nil?
++
++    url = ActivityPub::TagManager.instance.url_for(options[:quoted_status]) || ActivityPub::TagManager.instance.uri_for(options[:quoted_status])
++    return html if url.blank? || html.include?(url)
++
++    <<~HTML.squish
++      <p class="quote-inline">RE: #{TextFormatter.shortened_link(url)}</p>#{html}
++    HTML
++  end
++end
+diff --git a/app/models/status.rb b/app/models/status.rb
+index 2595c2ed56..68f0a1fa6b 100644
+--- a/app/models/status.rb
++++ b/app/models/status.rb
+@@ -48,7 +48,8 @@ class Status < ApplicationRecord
+ 
+   MEDIA_ATTACHMENTS_LIMIT = 4
+   CONTENT_TYPE_PLAIN = 'text/plain'
+-  SUPPORTED_CONTENT_TYPES = [CONTENT_TYPE_PLAIN].freeze
++  CONTENT_TYPE_MARKDOWN = 'text/markdown'
++  SUPPORTED_CONTENT_TYPES = [CONTENT_TYPE_PLAIN, CONTENT_TYPE_MARKDOWN].freeze
+ 
+   rate_limit by: :account, family: :statuses
+ 
+diff --git a/app/serializers/activitypub/note_serializer.rb b/app/serializers/activitypub/note_serializer.rb
+index f162f4ee24..08c81ba46a 100644
+--- a/app/serializers/activitypub/note_serializer.rb
++++ b/app/serializers/activitypub/note_serializer.rb
+@@ -14,6 +14,7 @@ class ActivityPub::NoteSerializer < ActivityPub::Serializer
+ 
+   attribute :content
+   attribute :content_map, if: :language?
++  attribute :source, if: :markdown?
+   attribute :updated, if: :edited?
+ 
+   has_many :virtual_attachments, key: :attachment
+@@ -58,6 +59,13 @@ class ActivityPub::NoteSerializer < ActivityPub::Serializer
+     { object.language => content }
+   end
+ 
++  def source
++    {
++      content: object.text,
++      mediaType: object.effective_content_type,
++    }
++  end
++
+   def replies
+     replies = object.self_replies(5).pluck(:id, :uri)
+     last_id = replies.last&.first
+@@ -94,6 +102,10 @@ class ActivityPub::NoteSerializer < ActivityPub::Serializer
+     object.language.present?
+   end
+ 
++  def markdown?
++    object.effective_content_type == Status::CONTENT_TYPE_MARKDOWN
++  end
++
+   delegate :edited?, to: :object
+ 
+   def in_reply_to
+diff --git a/app/services/activitypub/process_status_update_service.rb b/app/services/activitypub/process_status_update_service.rb
+index 0ab3742040..5ba7e51c52 100644
+--- a/app/services/activitypub/process_status_update_service.rb
++++ b/app/services/activitypub/process_status_update_service.rb
+@@ -170,11 +170,12 @@ class ActivityPub::ProcessStatusUpdateService < BaseService
+ 
+   def update_immediate_attributes!
+     @status.text         = @status_parser.processed_text
++    @status.content_type = @status_parser.content_type
+     @status.spoiler_text = @status_parser.processed_spoiler_text
+     @status.sensitive    = @account.sensitized? || @status_parser.sensitive || false
+     @status.language     = @status_parser.language
+ 
+-    @significant_changes = text_significantly_changed? || @status.spoiler_text_changed? || @media_attachments_changed || @poll_changed || @quote_changed
++    @significant_changes = text_significantly_changed? || @status.content_type_changed? || @status.spoiler_text_changed? || @media_attachments_changed || @poll_changed || @quote_changed
+ 
+     @status.edited_at = @status_parser.edited_at if significant_changes?
+ 
+diff --git a/app/services/update_status_service.rb b/app/services/update_status_service.rb
+index df44f4c82c..26107b13dd 100644
+--- a/app/services/update_status_service.rb
++++ b/app/services/update_status_service.rb
+@@ -130,7 +130,7 @@ class UpdateStatusService < BaseService
+   end
+ 
+   def reset_preview_card!
+-    return unless @status.text_previously_changed?
++    return unless @status.text_previously_changed? || @status.content_type_previously_changed?
+ 
+     @status.reset_preview_card!
+     LinkCrawlWorker.perform_async(@status.id)
+diff --git a/spec/lib/activitypub/activity/create_spec.rb b/spec/lib/activitypub/activity/create_spec.rb
+index 0fc789037c..9598dbd1fb 100644
+--- a/spec/lib/activitypub/activity/create_spec.rb
++++ b/spec/lib/activitypub/activity/create_spec.rb
+@@ -288,6 +288,26 @@ RSpec.describe ActivityPub::Activity::Create do
+         end
+       end
+ 
++      context 'with Markdown source' do
++        let(:object_json) do
++          build_object(
++            content: '<p><strong>Lorem ipsum</strong></p>',
++            source: {
++              content: '**Lorem ipsum**',
++              mediaType: 'text/markdown',
++            }
++          )
++        end
++
++        it 'creates status with raw Markdown source and content type', :aggregate_failures do
++          expect { subject.perform }.to change(sender.statuses, :count).by(1)
++
++          status = sender.statuses.first
++          expect(status.text).to eq '**Lorem ipsum**'
++          expect(status.content_type).to eq 'text/markdown'
++        end
++      end
++
+       context 'when public with explicit public address' do
+         let(:object_json) do
+           build_object(
+diff --git a/spec/lib/activitypub/parser/status_parser_spec.rb b/spec/lib/activitypub/parser/status_parser_spec.rb
+index b251b63f43..88e4135ad4 100644
+--- a/spec/lib/activitypub/parser/status_parser_spec.rb
++++ b/spec/lib/activitypub/parser/status_parser_spec.rb
+@@ -49,6 +49,30 @@ RSpec.describe ActivityPub::Parser::StatusParser do
+     )
+   end
+ 
++  context 'when the object includes Markdown source' do
++    let(:object_json) do
++      {
++        id: [ActivityPub::TagManager.instance.uri_for(sender), 'post1'].join('/'),
++        type: 'Note',
++        to: 'https://www.w3.org/ns/activitystreams#Public',
++        content: '<p><strong>Hello</strong></p>',
++        source: {
++          content: '**Hello**',
++          mediaType: 'text/markdown',
++        },
++        published: 1.hour.ago.utc.iso8601,
++      }
++    end
++
++    it 'uses the source content and preserves content type' do
++      expect(subject).to have_attributes(
++        text: '**Hello**',
++        processed_text: '**Hello**',
++        content_type: 'text/markdown'
++      )
++    end
++  end
++
+   context 'when the likes collection is not inlined' do
+     let(:object_json) do
+       {
+diff --git a/spec/lib/html_aware_formatter_spec.rb b/spec/lib/html_aware_formatter_spec.rb
+index b75ccb06e7..f7a250a583 100644
+--- a/spec/lib/html_aware_formatter_spec.rb
++++ b/spec/lib/html_aware_formatter_spec.rb
+@@ -13,6 +13,14 @@ RSpec.describe HtmlAwareFormatter do
+       it 'returns formatted text' do
+         expect(subject).to eq '<p>Foo bar</p>'
+       end
++
++      context 'with Markdown content type' do
++        subject { described_class.new('**Foo**', local, content_type: 'text/markdown').to_s }
++
++        it 'renders Markdown' do
++          expect(subject).to include '<strong>Foo</strong>'
++        end
++      end
+     end
+ 
+     context 'when remote' do
+diff --git a/spec/lib/markdown_formatter_spec.rb b/spec/lib/markdown_formatter_spec.rb
+new file mode 100644
+index 0000000000..5440969f60
+--- /dev/null
++++ b/spec/lib/markdown_formatter_spec.rb
+@@ -0,0 +1,32 @@
++# frozen_string_literal: true
++
++require 'rails_helper'
++
++RSpec.describe MarkdownFormatter do
++  describe '#to_s' do
++    subject { described_class.new(text).to_s }
++
++    context 'with Markdown formatting' do
++      let(:text) { "# Heading\n\n- **bold** and _emphasis_\n- [Mastodon](https://joinmastodon.org)\n\n`code`" }
++
++      it 'renders supported Markdown as sanitized HTML', :aggregate_failures do
++        expect(subject).to include('<p><strong>Heading</strong></p>')
++        expect(subject).to include('<ul>')
++        expect(subject).to include('<strong>bold</strong>')
++        expect(subject).to include('<em>emphasis</em>')
++        expect(subject).to include('<a href="https://joinmastodon.org"')
++        expect(subject).to include('<code>code</code>')
++      end
++    end
++
++    context 'with HTML and images' do
++      let(:text) { '<script>alert("xss")</script> ![alt](https://example.com/image.png)' }
++
++      it 'escapes HTML and omits images', :aggregate_failures do
++        expect(subject).to include('&lt;script&gt;')
++        expect(subject).to_not include('<script>')
++        expect(subject).to_not include('<img')
++      end
++    end
++  end
++end
+diff --git a/spec/requests/api/v1/statuses/sources_spec.rb b/spec/requests/api/v1/statuses/sources_spec.rb
+index 5ae266396d..a03c963f86 100644
+--- a/spec/requests/api/v1/statuses/sources_spec.rb
++++ b/spec/requests/api/v1/statuses/sources_spec.rb
+@@ -31,6 +31,16 @@ RSpec.describe 'Sources' do
+           content_type: 'text/plain',
+         })
+       end
++
++      context 'with Markdown content type' do
++        let(:status) { Fabricate(:status, text: '**Hello**', content_type: 'text/markdown') }
++
++        it 'returns the Markdown content type' do
++          subject
++
++          expect(response.parsed_body[:content_type]).to eq 'text/markdown'
++        end
++      end
+     end
+ 
+     context 'with private status of non-followed account' do
+diff --git a/spec/requests/api/v1/statuses_spec.rb b/spec/requests/api/v1/statuses_spec.rb
+index 96243a4b39..fb10b3c3f0 100644
+--- a/spec/requests/api/v1/statuses_spec.rb
++++ b/spec/requests/api/v1/statuses_spec.rb
+@@ -184,6 +184,18 @@ RSpec.describe '/api/v1/statuses' do
+           expect(response.parsed_body).to_not include(:content_type)
+           expect(user.account.statuses.last.content_type).to eq 'text/plain'
+         end
++
++        context 'with Markdown content type' do
++          let(:params) { { status: '**Hello world**', content_type: 'text/markdown' } }
++
++          it 'creates and renders a Markdown status', :aggregate_failures do
++            subject
++
++            expect(response).to have_http_status(200)
++            expect(response.parsed_body[:content]).to include('<strong>Hello world</strong>')
++            expect(user.account.statuses.last.content_type).to eq 'text/markdown'
++          end
++        end
+       end
+ 
+       context 'without a quote policy' do
+@@ -570,6 +582,18 @@ RSpec.describe '/api/v1/statuses' do
+           expect(response.parsed_body).to_not include(:content_type)
+           expect(status.reload.content_type).to eq 'text/plain'
+         end
++
++        context 'with Markdown content type' do
++          let(:params) { { status: '**I am updated**', content_type: 'text/markdown' } }
++
++          it 'updates and renders the Markdown status', :aggregate_failures do
++            subject
++
++            expect(response).to have_http_status(200)
++            expect(response.parsed_body[:content]).to include('<strong>I am updated</strong>')
++            expect(status.reload.content_type).to eq 'text/markdown'
++          end
++        end
+       end
+ 
+       context 'when content type param is omitted' do
+diff --git a/spec/serializers/activitypub/note_serializer_spec.rb b/spec/serializers/activitypub/note_serializer_spec.rb
+index 0d11386d57..d7f357412a 100644
+--- a/spec/serializers/activitypub/note_serializer_spec.rb
++++ b/spec/serializers/activitypub/note_serializer_spec.rb
+@@ -87,4 +87,19 @@ RSpec.describe ActivityPub::NoteSerializer do
+       })
+     end
+   end
++
++  context 'with Markdown content type' do
++    let(:parent) { Fabricate(:status, account: account, text: '**Hello**', content_type: 'text/markdown') }
++
++    it 'renders content and includes Markdown source' do
++      expect(subject)
++        .to include(
++          'content' => include('<strong>Hello</strong>'),
++          'source' => {
++            'content' => '**Hello**',
++            'mediaType' => 'text/markdown',
++          }
++        )
++    end
++  end
+ end
+diff --git a/spec/services/activitypub/process_status_update_service_spec.rb b/spec/services/activitypub/process_status_update_service_spec.rb
+index 48bb782038..19e273f027 100644
+--- a/spec/services/activitypub/process_status_update_service_spec.rb
++++ b/spec/services/activitypub/process_status_update_service_spec.rb
+@@ -50,6 +50,32 @@ RSpec.describe ActivityPub::ProcessStatusUpdateService do
+       expect(MentionResolveWorker).to have_enqueued_sidekiq_job(status.id, bogus_mention, anything)
+     end
+ 
++    context 'when the update includes Markdown source' do
++      let(:payload) do
++        {
++          '@context': 'https://www.w3.org/ns/activitystreams',
++          id: 'foo',
++          type: 'Note',
++          content: '<p><strong>Hello universe</strong></p>',
++          source: {
++            content: '**Hello universe**',
++            mediaType: 'text/markdown',
++          },
++          updated: '2021-09-08T22:39:25Z',
++        }
++      end
++
++      it 'updates text and content type from the Markdown source' do
++        subject.call(status, json, json)
++
++        expect(status.reload)
++          .to have_attributes(
++            text: '**Hello universe**',
++            content_type: 'text/markdown'
++          )
++      end
++    end
++
+     context 'when the changes are only in sanitized-out HTML' do
+       let!(:status) { Fabricate(:status, text: '<p>Hello world <a href="https://joinmastodon.org" rel="nofollow">joinmastodon.org</a></p>', account: Fabricate(:account, domain: 'example.com')) }
+ 
+diff --git a/spec/services/post_status_service_spec.rb b/spec/services/post_status_service_spec.rb
+index ede1421383..b839a26040 100644
+--- a/spec/services/post_status_service_spec.rb
++++ b/spec/services/post_status_service_spec.rb
+@@ -22,6 +22,13 @@ RSpec.describe PostStatusService do
+     expect(status.content_type).to eq 'text/plain'
+   end
+ 
++  it 'creates a Markdown status with an explicit content type' do
++    status = subject.call(Fabricate(:account), text: '**test status update**', content_type: 'text/markdown')
++
++    expect(status).to be_persisted
++    expect(status.content_type).to eq 'text/markdown'
++  end
++
+   it 'creates a new response status' do
+     in_reply_to_status = Fabricate(:status)
+     account = Fabricate(:account)
+diff --git a/spec/services/update_status_service_spec.rb b/spec/services/update_status_service_spec.rb
+index fa9b039ca9..30d1b76939 100644
+--- a/spec/services/update_status_service_spec.rb
++++ b/spec/services/update_status_service_spec.rb
+@@ -84,6 +84,19 @@ RSpec.describe UpdateStatusService do
+       expect(status.edits.ordered.pluck(:content_type))
+         .to eq [nil, 'text/plain']
+     end
++
++    context 'when content type changes to Markdown' do
++      let(:status) { Fabricate(:status, text: 'Foo', content_type: nil) }
++
++      it 'updates content type and saves edit history' do
++        subject.call(status, status.account_id, text: '**Foo**', content_type: 'text/markdown')
++
++        expect(status.reload.content_type)
++          .to eq 'text/markdown'
++        expect(status.edits.ordered.pluck(:text, :content_type))
++          .to eq [['Foo', nil], ['**Foo**', 'text/markdown']]
++      end
++    end
+   end
+ 
+   context 'when content warning changes' do
