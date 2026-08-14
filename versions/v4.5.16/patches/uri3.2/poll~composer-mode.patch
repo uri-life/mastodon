@@ -1,0 +1,20 @@
+diff --git a/app/javascript/mastodon/reducers/compose.js b/app/javascript/mastodon/reducers/compose.js
+index 309ce20751..80f8eee060 100644
+--- a/app/javascript/mastodon/reducers/compose.js
++++ b/app/javascript/mastodon/reducers/compose.js
+@@ -10,15 +10,12 @@ import {
+   cancelPasteLinkCompose,
+ } from '@/mastodon/actions/compose_typed';
+ import { timelineDelete } from 'mastodon/actions/timelines_typed';
+-<<<<<<< HEAD
+ import {
+   COMPOSE_INPUT_MODE_PLAIN,
+   composeInputModeFromContentType,
+   isComposeInputMode,
+ } from 'mastodon/features/compose/input_modes';
+-=======
+ import { getNearestPollDuration } from 'mastodon/features/compose/util/poll_duration';
+->>>>>>> Improve poll configuration in the compose form
+ 
+ import {
+   COMPOSE_MOUNT,

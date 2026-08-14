@@ -1,0 +1,17 @@
+diff --git a/app/javascript/mastodon/components/status.jsx b/app/javascript/mastodon/components/status.jsx
+index 81acf9b882..c310fff20d 100644
+--- a/app/javascript/mastodon/components/status.jsx
++++ b/app/javascript/mastodon/components/status.jsx
+@@ -25,11 +25,7 @@ import Card from '../features/status/components/card';
+ import Bundle from '../features/ui/components/bundle';
+ import { MediaGallery, Video, Audio } from '../features/ui/util/async-components';
+ import { SensitiveMediaContext } from '../features/ui/util/sensitive_media_context';
+-<<<<<<< HEAD
+-import { displayMedia, me } from '../initial_state';
+-=======
+-import { displayMedia, getLanguageName } from '../initial_state';
+->>>>>>> Display post language in UI
++import { displayMedia, getLanguageName, me } from '../initial_state';
+ 
+ import { Avatar } from './avatar';
+ import { AvatarOverlay } from './avatar_overlay';
