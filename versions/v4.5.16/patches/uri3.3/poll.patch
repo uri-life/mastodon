@@ -1,0 +1,609 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Mon, 25 May 2026 19:13:38 +0900
+Subject: [PATCH] Improve poll configuration in the compose form
+
+- Replace dropdowns with a slider and radio buttons
+- Create a utility module to manage poll durations
+- Implement snap points for intuitive duration selection
+- Update CSS to support the new interactive UI components
+- Add test suites for the poll duration logic
+
+Rationale: Enhancing the poll interface with interactive elements improves usability and provides a more intuitive experience for configuring expiration times and multiple-choice settings.
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+
+diff --git a/app/javascript/mastodon/features/compose/components/poll_form.jsx b/app/javascript/mastodon/features/compose/components/poll_form.jsx
+index e8d5331196..696dc51523 100644
+--- a/app/javascript/mastodon/features/compose/components/poll_form.jsx
++++ b/app/javascript/mastodon/features/compose/components/poll_form.jsx
+@@ -15,6 +15,11 @@ import {
+   selectComposeSuggestion,
+ } from 'mastodon/actions/compose';
+ import AutosuggestInput from 'mastodon/components/autosuggest_input';
++import {
++  getPollDurationAtIndex,
++  getPollDurationIndex,
++  getPollDurationSnapPoints,
++} from 'mastodon/features/compose/util/poll_duration';
+ 
+ const messages = defineMessages({
+   option_placeholder: { id: 'compose_form.poll.option_placeholder', defaultMessage: 'Option {number}' },
+@@ -29,28 +34,119 @@ const messages = defineMessages({
+   multipleChoice: { id: 'compose_form.poll.multiple', defaultMessage: 'Multiple choice' },
+ });
+ 
+-const Select = ({ label, options, value, onChange }) => {
++const formatDuration = (intl, duration) => {
++  if (duration % (24 * 3600) === 0) {
++    return intl.formatMessage(messages.days, { number: duration / (24 * 3600) });
++  }
++
++  const totalMinutes = Math.round(duration / 60);
++  const hours = Math.floor(totalMinutes / 60);
++  const minutes = totalMinutes % 60;
++
++  if (hours === 0) {
++    return intl.formatMessage(messages.minutes, { number: minutes });
++  }
++
++  if (minutes === 0) {
++    return intl.formatMessage(messages.hours, { number: hours });
++  }
++
++  return [
++    intl.formatMessage(messages.hours, { number: hours }),
++    intl.formatMessage(messages.minutes, { number: minutes }),
++  ].join(' ');
++};
++
++const PollDurationSlider = ({ label, value, onChange, configuration }) => {
++  const intl = useIntl();
++  const snapPoints = getPollDurationSnapPoints(configuration);
++  const sliderValue = getPollDurationIndex(value, configuration);
++  const duration = getPollDurationAtIndex(sliderValue, configuration);
++  const formattedDuration = formatDuration(intl, duration);
++
++  const handleChange = useCallback(({ target: { value } }) => {
++    onChange(getPollDurationAtIndex(value, configuration));
++  }, [configuration, onChange]);
++
+   return (
+-    <label className='compose-form__poll__select'>
+-      <span className='compose-form__poll__select__label'>{label}</span>
+-
+-      <select className='compose-form__poll__select__value' value={value} onChange={onChange}>
+-        {options.map((option, i) => (
+-          <option key={i} value={option.value}>{option.label}</option>
+-        ))}
+-      </select>
++    <label className='compose-form__poll__duration-slider'>
++      <span className='compose-form__poll__duration-slider__label'>{label}</span>
++      <span className='compose-form__poll__duration-slider__value'>{formattedDuration}</span>
++
++      <input
++        className='compose-form__poll__duration-slider__input'
++        type='range'
++        min={0}
++        max={snapPoints.length - 1}
++        step={1}
++        value={sliderValue}
++        aria-valuetext={formattedDuration}
++        onChange={handleChange}
++      />
+     </label>
+   );
+ };
+ 
+-Select.propTypes = {
++PollDurationSlider.propTypes = {
+   label: PropTypes.node,
+   value: PropTypes.any,
+   onChange: PropTypes.func,
+-  options: PropTypes.arrayOf(PropTypes.shape({
+-    label: PropTypes.node,
+-    value: PropTypes.any,
+-  })),
++  configuration: PropTypes.object,
++};
++
++const PollStyleToggleButton = ({ value, checked, onChange, label }) => (
++  <label className={classNames('compose-form__poll__style__option', { active: checked })}>
++    <input
++      className='compose-form__poll__style__input'
++      name='poll-style'
++      type='radio'
++      value={value}
++      checked={checked}
++      onChange={onChange}
++    />
++
++    <span className='compose-form__poll__style__option-label'>{label}</span>
++  </label>
++);
++
++PollStyleToggleButton.propTypes = {
++  value: PropTypes.string,
++  checked: PropTypes.bool,
++  onChange: PropTypes.func,
++  label: PropTypes.node,
++};
++
++const PollStyleRadioGroup = ({ label, value, onChange }) => {
++  const intl = useIntl();
++  const currentValue = value ? 'true' : 'false';
++
++  return (
++    <div className='compose-form__poll__style'>
++      <span className='compose-form__poll__style__label'>{label}</span>
++
++      <div className='compose-form__poll__style__options' role='radiogroup' aria-label={label}>
++        <PollStyleToggleButton
++          value='false'
++          checked={currentValue === 'false'}
++          onChange={onChange}
++          label={intl.formatMessage(messages.singleChoice)}
++        />
++
++        <PollStyleToggleButton
++          value='true'
++          checked={currentValue === 'true'}
++          onChange={onChange}
++          label={intl.formatMessage(messages.multipleChoice)}
++        />
++      </div>
++    </div>
++  );
++};
++
++PollStyleRadioGroup.propTypes = {
++  label: PropTypes.node,
++  value: PropTypes.bool,
++  onChange: PropTypes.func,
+ };
+ 
+ const Option = ({ multipleChoice, index, title, autoFocus }) => {
+@@ -109,11 +205,12 @@ export const PollForm = () => {
+   const intl = useIntl();
+   const dispatch = useDispatch();
+   const poll = useSelector(state => state.getIn(['compose', 'poll']));
++  const pollConfiguration = useSelector(state => state.getIn(['server', 'server', 'configuration', 'polls']));
+   const options = poll?.get('options');
+   const expiresIn = poll?.get('expires_in');
+   const isMultiple = poll?.get('multiple');
+ 
+-  const handleDurationChange = useCallback(({ target: { value } }) => {
++  const handleDurationChange = useCallback(value => {
+     dispatch(changePollSettings(value, isMultiple));
+   }, [dispatch, isMultiple]);
+ 
+@@ -138,23 +235,20 @@ export const PollForm = () => {
+       ))}
+ 
+       <div className='compose-form__poll__footer'>
+-        <Select label={intl.formatMessage(messages.duration)} options={[
+-          { value: 300, label: intl.formatMessage(messages.minutes, { number: 5 })},
+-          { value: 1800, label: intl.formatMessage(messages.minutes, { number: 30 })},
+-          { value: 3600, label: intl.formatMessage(messages.hours, { number: 1 })},
+-          { value: 21600, label: intl.formatMessage(messages.hours, { number: 6 })},
+-          { value: 43200, label: intl.formatMessage(messages.hours, { number: 12 })},
+-          { value: 86400, label: intl.formatMessage(messages.days, { number: 1 })},
+-          { value: 259200, label: intl.formatMessage(messages.days, { number: 3 })},
+-          { value: 604800, label: intl.formatMessage(messages.days, { number: 7 })},
+-        ]} value={expiresIn} onChange={handleDurationChange} />
++        <PollDurationSlider
++          label={intl.formatMessage(messages.duration)}
++          value={expiresIn}
++          onChange={handleDurationChange}
++          configuration={pollConfiguration}
++        />
+ 
+         <div className='compose-form__poll__footer__sep' />
+ 
+-        <Select label={intl.formatMessage(messages.type)} options={[
+-          { value: false, label: intl.formatMessage(messages.singleChoice) },
+-          { value: true, label: intl.formatMessage(messages.multipleChoice) },
+-        ]} value={isMultiple} onChange={handleTypeChange} />
++        <PollStyleRadioGroup
++          label={intl.formatMessage(messages.type)}
++          value={isMultiple}
++          onChange={handleTypeChange}
++        />
+       </div>
+     </div>
+   );
+diff --git a/app/javascript/mastodon/features/compose/util/__tests__/poll_duration-test.js b/app/javascript/mastodon/features/compose/util/__tests__/poll_duration-test.js
+new file mode 100644
+index 0000000000..7972da55f8
+--- /dev/null
++++ b/app/javascript/mastodon/features/compose/util/__tests__/poll_duration-test.js
+@@ -0,0 +1,79 @@
++import {
++  DEFAULT_POLL_DURATION,
++  getNearestPollDuration,
++  getPollDurationAtIndex,
++  getPollDurationIndex,
++  getPollDurationSnapPoints,
++} from '../poll_duration';
++
++describe('poll duration helpers', () => {
++  it('uses clean exponential-ish snap points by default', () => {
++    expect(getPollDurationSnapPoints()).toEqual([
++      300,
++      600,
++      900,
++      1200,
++      1800,
++      2700,
++      3600,
++      5400,
++      7200,
++      9000,
++      10800,
++      14400,
++      18000,
++      21600,
++      25200,
++      28800,
++      32400,
++      43200,
++      54000,
++      64800,
++      DEFAULT_POLL_DURATION,
++      172800,
++      259200,
++      345600,
++      432000,
++      518400,
++      604800,
++    ]);
++  });
++
++  it('clamps snap points to server-provided limits', () => {
++    expect(getPollDurationSnapPoints({ min_expiration: 1800, max_expiration: 86400 })).toEqual([
++      1800,
++      2700,
++      3600,
++      5400,
++      7200,
++      9000,
++      10800,
++      14400,
++      18000,
++      21600,
++      25200,
++      28800,
++      32400,
++      43200,
++      54000,
++      64800,
++      86400,
++    ]);
++  });
++
++  it('does not add snap points beyond the requested list even when the server allows them', () => {
++    expect(getPollDurationSnapPoints({ min_expiration: 300, max_expiration: 2592000 })).not.toContain(2592000);
++  });
++
++  it('finds the nearest snapped duration', () => {
++    expect(getNearestPollDuration(11 * 3600)).toEqual(43200);
++    expect(getNearestPollDuration(25 * 3600)).toEqual(DEFAULT_POLL_DURATION);
++  });
++
++  it('maps durations to and from slider indexes', () => {
++    const index = getPollDurationIndex(43200);
++
++    expect(index).toEqual(17);
++    expect(getPollDurationAtIndex(index)).toEqual(43200);
++  });
++});
+diff --git a/app/javascript/mastodon/features/compose/util/poll_duration.js b/app/javascript/mastodon/features/compose/util/poll_duration.js
+new file mode 100644
+index 0000000000..0113de37eb
+--- /dev/null
++++ b/app/javascript/mastodon/features/compose/util/poll_duration.js
+@@ -0,0 +1,90 @@
++const SECOND = 1;
++const MINUTE = 60 * SECOND;
++const HOUR = 60 * MINUTE;
++const DAY = 24 * HOUR;
++
++export const DEFAULT_POLL_DURATION = DAY;
++export const DEFAULT_POLL_MIN_EXPIRATION = 5 * MINUTE;
++export const DEFAULT_POLL_MAX_EXPIRATION = 7 * DAY;
++
++const POLL_DURATION_SNAP_POINTS = [
++  5 * MINUTE,
++  10 * MINUTE,
++  15 * MINUTE,
++  20 * MINUTE,
++  30 * MINUTE,
++  45 * MINUTE,
++  HOUR,
++  HOUR + 30 * MINUTE,
++  2 * HOUR,
++  2 * HOUR + 30 * MINUTE,
++  3 * HOUR,
++  4 * HOUR,
++  5 * HOUR,
++  6 * HOUR,
++  7 * HOUR,
++  8 * HOUR,
++  9 * HOUR,
++  12 * HOUR,
++  15 * HOUR,
++  18 * HOUR,
++  DAY,
++  2 * DAY,
++  3 * DAY,
++  4 * DAY,
++  5 * DAY,
++  6 * DAY,
++  7 * DAY,
++];
++
++const getConfigurationValue = (configuration, key, fallback) => {
++  const value = typeof configuration?.get === 'function' ? configuration.get(key) : configuration?.[key];
++  const number = Number(value);
++
++  return Number.isFinite(number) && number > 0 ? number : fallback;
++};
++
++export const getPollDurationLimits = configuration => {
++  const minExpiration = getConfigurationValue(configuration, 'min_expiration', DEFAULT_POLL_MIN_EXPIRATION);
++  const maxExpiration = Math.max(
++    minExpiration,
++    getConfigurationValue(configuration, 'max_expiration', DEFAULT_POLL_MAX_EXPIRATION),
++  );
++
++  return { minExpiration, maxExpiration };
++};
++
++export const getPollDurationSnapPoints = configuration => {
++  const { minExpiration, maxExpiration } = getPollDurationLimits(configuration);
++  const snapPoints = POLL_DURATION_SNAP_POINTS.filter(duration => duration >= minExpiration && duration <= maxExpiration);
++
++  return snapPoints.length > 0 ? snapPoints : [DEFAULT_POLL_DURATION];
++};
++
++export const getNearestPollDuration = (expiresIn, configuration) => {
++  const snapPoints = getPollDurationSnapPoints(configuration);
++  const value = Number(expiresIn);
++  const duration = Number.isFinite(value) && value > 0 ? value : DEFAULT_POLL_DURATION;
++
++  return snapPoints.reduce((closest, snapPoint) => (
++    Math.abs(snapPoint - duration) < Math.abs(closest - duration) ? snapPoint : closest
++  ), snapPoints[0]);
++};
++
++export const getPollDurationIndex = (expiresIn, configuration) => {
++  const snapPoints = getPollDurationSnapPoints(configuration);
++  const duration = getNearestPollDuration(expiresIn, configuration);
++
++  return snapPoints.indexOf(duration);
++};
++
++export const getPollDurationAtIndex = (index, configuration) => {
++  const snapPoints = getPollDurationSnapPoints(configuration);
++  const numericIndex = Number(index);
++
++  if (!Number.isInteger(numericIndex)) {
++    return getNearestPollDuration(DEFAULT_POLL_DURATION, configuration);
++  }
++
++  return snapPoints[Math.min(Math.max(numericIndex, 0), snapPoints.length - 1)];
++};
+diff --git a/app/javascript/mastodon/reducers/compose.js b/app/javascript/mastodon/reducers/compose.js
+index 32a2919f16..aae232dd65 100644
+--- a/app/javascript/mastodon/reducers/compose.js
++++ b/app/javascript/mastodon/reducers/compose.js
+@@ -10,6 +10,7 @@ import {
+   cancelPasteLinkCompose,
+ } from '@/mastodon/actions/compose_typed';
+ import { timelineDelete } from 'mastodon/actions/timelines_typed';
++import { getNearestPollDuration } from 'mastodon/features/compose/util/poll_duration';
+ 
+ import {
+   COMPOSE_MOUNT,
+@@ -259,7 +260,7 @@ const expandMentions = status => {
+ const expiresInFromExpiresAt = expires_at => {
+   if (!expires_at) return 24 * 3600;
+   const delta = (new Date(expires_at).getTime() - Date.now()) / 1000;
+-  return [300, 1800, 3600, 21600, 86400, 259200, 604800].find(expires_in => expires_in >= delta) || 24 * 3600;
++  return getNearestPollDuration(delta);
+ };
+ 
+ const mergeLocalHashtagResults = (suggestions, prefix, tagHistory) => {
+diff --git a/app/javascript/styles/mastodon/components.scss b/app/javascript/styles/mastodon/components.scss
+index 57bd22007e..678b10e90a 100644
+--- a/app/javascript/styles/mastodon/components.scss
++++ b/app/javascript/styles/mastodon/components.scss
+@@ -951,23 +951,24 @@
+ 
+     &__footer {
+       display: flex;
+-      align-items: center;
+-      gap: 16px;
+-      padding-inline-start: 37px;
+-      padding-inline-end: 40px;
++      align-items: stretch;
++      flex-direction: column;
++      gap: 12px;
++      padding-inline-start: 12px;
++      padding-inline-end: 12px;
+ 
+       &__sep {
+-        width: 1px;
+-        height: 22px;
++        width: 100%;
++        height: 1px;
+         background: lighten($ui-base-color, 8%);
+         flex: 0 0 auto;
+       }
+     }
+ 
+-    &__select {
++    &__style {
+       display: flex;
+       flex-direction: column;
+-      gap: 2px;
++      gap: 8px;
+       flex: 1 1 auto;
+       min-width: 0;
+ 
+@@ -983,21 +984,147 @@
+         overflow: hidden;
+       }
+ 
+-      &__value {
++      &__options {
++        display: flex;
++        align-items: center;
++        gap: 2px;
++        max-width: 100%;
++        padding: 2px;
++        border: 1px solid lighten($ui-base-color, 8%);
++        border-radius: 4px;
++        background: var(--input-background-color);
++      }
++
++      &__option {
++        position: relative;
++        display: flex;
++        align-items: center;
++        justify-content: center;
++        padding: 4px 12px;
++        border-radius: 4px;
++        color: $highlight-text-color;
++        font-size: 13px;
++        font-weight: 500;
++        line-height: 18px;
++        letter-spacing: 0.1px;
++        cursor: pointer;
++        flex: 1 1 0;
++        min-width: 0;
++
++        &.active {
++          background: color.change($ui-highlight-color, $alpha: 0.25);
++          box-shadow: inset 0 0 0 1px $ui-highlight-color;
++          color: $highlight-text-color;
++        }
++      }
++
++      &__input {
++        position: absolute;
++        inset: 0;
++        opacity: 0;
++        cursor: pointer;
++      }
++
++      &__option-label {
++        border-radius: 4px;
++        white-space: nowrap;
++        text-overflow: ellipsis;
++        overflow: hidden;
++      }
++
++      &__input:focus-visible + &__option-label {
++        outline: 2px solid $ui-highlight-color;
++        outline-offset: 4px;
++      }
++    }
++
++    &__duration-slider {
++      display: grid;
++      grid-template-columns: minmax(0, 1fr) auto;
++      grid-template-areas:
++        'label value'
++        'input input';
++      gap: 2px 12px;
++      flex: 1 1 auto;
++      min-width: 0;
++
++      &__label {
++        grid-area: label;
+         flex: 0 0 auto;
+-        appearance: none;
+-        background: transparent;
+-        border: none;
+-        padding: 0;
++        font-size: 11px;
++        font-weight: 500;
++        line-height: 16px;
++        letter-spacing: 0.5px;
++        color: $darker-text-color;
++        white-space: nowrap;
++        text-overflow: ellipsis;
++        overflow: hidden;
++      }
++
++      &__value {
++        grid-area: value;
+         font-size: 14px;
+         font-weight: 500;
+         line-height: 20px;
+         letter-spacing: 0.1px;
+         color: $highlight-text-color;
+-        background-color: var(--input-background-color);
+         white-space: nowrap;
+-        text-overflow: ellipsis;
+-        overflow: hidden;
++      }
++
++      &__input {
++        grid-area: input;
++        appearance: none;
++        background: transparent;
++        width: 100%;
++        min-width: 0;
++        margin: 2px 0 0;
++        accent-color: $ui-highlight-color;
++
++        &:focus {
++          outline: 0;
++        }
++
++        &::-webkit-slider-runnable-track {
++          height: 4px;
++          border-radius: 999px;
++          background: lighten($ui-base-color, 8%);
++        }
++
++        &::-moz-range-track {
++          height: 4px;
++          border-radius: 999px;
++          background: lighten($ui-base-color, 8%);
++        }
++
++        &::-webkit-slider-thumb {
++          appearance: none;
++          width: 14px;
++          height: 14px;
++          margin-top: -5px;
++          border: 0;
++          border-radius: 50%;
++          background: $ui-highlight-color;
++        }
++
++        &::-moz-range-thumb {
++          width: 14px;
++          height: 14px;
++          border: 0;
++          border-radius: 50%;
++          background: $ui-highlight-color;
++        }
++
++        &:focus-visible::-webkit-slider-thumb {
++          box-shadow:
++            0 0 0 2px var(--input-background-color),
++            0 0 0 4px $ui-highlight-color;
++        }
++
++        &:focus-visible::-moz-range-thumb {
++          box-shadow:
++            0 0 0 2px var(--input-background-color),
++            0 0 0 4px $ui-highlight-color;
++        }
+       }
+     }
+   }
