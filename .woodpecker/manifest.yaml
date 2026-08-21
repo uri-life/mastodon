@@ -1,5 +1,5 @@
-# 멀티 아키텍처 manifest 생성 워크플로우
-# 모든 플랫폼 빌드가 완료된 후 실행되어 플랫폼 통합 태그 생성
+# Multi-architecture manifest workflow
+# Run after every native build has published its platform-specific tags.
 
 variables:
   - &registry 'ghcr.io'
@@ -21,33 +21,67 @@ when:
     branch: main
     path:
       include:
-        - 'versions/**'
+        - '.woodpecker/**'
         - 'manifest.yaml'
+        - 'scripts/**'
+        - 'versions/**'
   - event: tag
     evaluate: 'CI_COMMIT_TAG matches "v[0-9]+\\\\.[0-9]+\\\\.[0-9]+([^+]+)?\\\\+uri[0-9]+\\\\.[0-9]+"'
   - event: manual
     branch: main
 
 steps:
-  # 버전 정보 추출
   - name: detect-versions
     image: alpine:latest
     commands:
       - apk add --no-cache git
-      - scripts/detect-versions.sh "../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
       - |
+        set -eu
+
         ENV_FILE="../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
-        # 이벤트 타입에 따른 태그 접미사 설정
-        if [ "${CI_PIPELINE_EVENT}" = "tag" ]; then
-          echo "IS_RELEASE=true" >> "$ENV_FILE"
-          echo "TAG_SUFFIX=" >> "$ENV_FILE"
-        else
-          echo "IS_RELEASE=false" >> "$ENV_FILE"
-          echo "TAG_SUFFIX=-staging" >> "$ENV_FILE"
+        scripts/detect-versions.sh "$ENV_FILE"
+
+        # Keep version selection identical to the build pipeline.
+        VERSIONS_TO_BUILD=$(sed -n 's/^VERSIONS_TO_BUILD=//p' "$ENV_FILE" | tail -n 1)
+        LATEST_VERSION=$(sed -n 's/^LATEST_VERSION=//p' "$ENV_FILE" | tail -n 1)
+
+        if [ "${CI_PIPELINE_EVENT}" = "manual" ]; then
+          if [ -z "$LATEST_VERSION" ]; then
+            echo "ERROR: Could not determine the latest patchset."
+            exit 1
+          fi
+          VERSIONS_TO_BUILD="$LATEST_VERSION"
+        elif [ "${CI_PIPELINE_EVENT}" = "push" ]; then
+          CHANGED_FILES=$(git show --name-only --format='' HEAD 2>/dev/null || true)
+          if printf '%s\n' "$CHANGED_FILES" | grep -qE '^(\.woodpecker/|scripts/|manifest\.yaml$)'; then
+            if [ -z "$LATEST_VERSION" ]; then
+              echo "ERROR: Could not determine the latest patchset for global CI changes."
+              exit 1
+            fi
+            case " $VERSIONS_TO_BUILD " in
+              *" $LATEST_VERSION "*) ;;
+              *) VERSIONS_TO_BUILD="${VERSIONS_TO_BUILD:+$VERSIONS_TO_BUILD }$LATEST_VERSION" ;;
+            esac
+          fi
         fi
 
-  # 멀티 아키텍처 manifest 생성
-  - name: create-manifest
+        if [ "${CI_PIPELINE_EVENT}" = "tag" ]; then
+          TAG_SUFFIX=''
+        else
+          TAG_SUFFIX='-staging'
+        fi
+
+        {
+          printf "VERSIONS_TO_BUILD='%s'\n" "$VERSIONS_TO_BUILD"
+          printf "LATEST_VERSION='%s'\n" "$LATEST_VERSION"
+          printf "TAG_SUFFIX='%s'\n" "$TAG_SUFFIX"
+        } > "${ENV_FILE}.tmp"
+        mv "${ENV_FILE}.tmp" "$ENV_FILE"
+
+        echo "Patchsets for manifests: ${VERSIONS_TO_BUILD:-none}"
+        echo "Latest patchset: ${LATEST_VERSION:-none}"
+
+  - name: create-manifests
     image: docker:cli
     environment:
       IMAGE_REGISTRY: *registry
@@ -59,66 +93,72 @@ steps:
         from_secret: GITHUB_TOKEN
     commands:
       - |
+        set -eu
+
         ENV_FILE="../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
         . "$ENV_FILE"
 
         if [ -z "$VERSIONS_TO_BUILD" ]; then
-          echo "빌드할 버전이 없습니다. 스킵합니다."
+          echo "No manifests to create."
           exit 0
         fi
 
-        # 레지스트리 로그인
-        echo "$GITHUB_TOKEN" | docker login "$IMAGE_REGISTRY" -u "$GITHUB_USERNAME" --password-stdin
+        LOGGED_IN=false
+        logout_registry() {
+          if [ "$LOGGED_IN" = true ]; then
+            docker logout "$IMAGE_REGISTRY" >/dev/null 2>&1 || true
+          fi
+        }
+        trap logout_registry EXIT
 
-        # buildx 빌더 생성 (imagetools 사용을 위해)
-        docker buildx create --use --name multiarch-builder 2>/dev/null || docker buildx use multiarch-builder
+        echo "$GITHUB_TOKEN" | docker login "$IMAGE_REGISTRY" \
+          --username "$GITHUB_USERNAME" \
+          --password-stdin
+        LOGGED_IN=true
 
         REGISTRY_IMAGE="$IMAGE_REGISTRY/$IMAGE_ORGANIZATION/$IMAGE_REPOSITORY_BASE"
         REGISTRY_STREAMING="$IMAGE_REGISTRY/$IMAGE_ORGANIZATION/$IMAGE_REPOSITORY_BASE-streaming"
 
         for VERSION_COMBO in $VERSIONS_TO_BUILD; do
-          MASTODON_VER=`echo "$VERSION_COMBO" | cut -d: -f1`
-          URI_VER=`echo "$VERSION_COMBO" | cut -d: -f2`
-
-          # 태그 정의 (staging일 경우 접미사 포함)
+          MASTODON_VER=${VERSION_COMBO%%:*}
+          URI_VER=${VERSION_COMBO#*:}
           MULTI_TAG="$MASTODON_VER-$URI_VER$TAG_SUFFIX"
           AMD64_TAG="$MULTI_TAG-amd64"
           ARM64_TAG="$MULTI_TAG-arm64"
 
-          # buildx imagetools를 사용하여 멀티 아키텍처 manifest 생성
-          # (manifest list를 소스로 사용해도 동작함)
           docker buildx imagetools create -t "$REGISTRY_IMAGE:$MULTI_TAG" \
             "$REGISTRY_IMAGE:$AMD64_TAG" \
             "$REGISTRY_IMAGE:$ARM64_TAG"
-
           docker buildx imagetools create -t "$REGISTRY_STREAMING:$MULTI_TAG" \
             "$REGISTRY_STREAMING:$AMD64_TAG" \
             "$REGISTRY_STREAMING:$ARM64_TAG"
 
-          # 최신 버전인 경우 latest manifest 생성
+          docker buildx imagetools inspect "$REGISTRY_IMAGE:$MULTI_TAG"
+          docker buildx imagetools inspect "$REGISTRY_STREAMING:$MULTI_TAG"
+
           if [ "$VERSION_COMBO" = "$LATEST_VERSION" ]; then
             LATEST_TAG="latest$TAG_SUFFIX"
+
             docker buildx imagetools create -t "$REGISTRY_IMAGE:$LATEST_TAG" \
               "$REGISTRY_IMAGE:$LATEST_TAG-amd64" \
               "$REGISTRY_IMAGE:$LATEST_TAG-arm64"
-
             docker buildx imagetools create -t "$REGISTRY_STREAMING:$LATEST_TAG" \
               "$REGISTRY_STREAMING:$LATEST_TAG-amd64" \
               "$REGISTRY_STREAMING:$LATEST_TAG-arm64"
+
+            docker buildx imagetools inspect "$REGISTRY_IMAGE:$LATEST_TAG"
+            docker buildx imagetools inspect "$REGISTRY_STREAMING:$LATEST_TAG"
           fi
         done
-
-        docker buildx rm multiarch-builder 2>/dev/null || true
-        docker logout "$IMAGE_REGISTRY"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
-  # 정리
   - name: cleanup
-    image: docker:cli
+    image: alpine:latest
     commands:
       - |
+        set -eu
         ENV_FILE="../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
-        rm -f "$ENV_FILE"
+        rm -f "$ENV_FILE" "${ENV_FILE}.tmp"
     when:
       - status: [success, failure]

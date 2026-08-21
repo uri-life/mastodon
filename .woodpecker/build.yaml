@@ -1,6 +1,5 @@
-# URI Mastodon 패치 빌드 워크플로우
-# 변경된 버전만 빌드하고, 최신 버전에는 latest 태그 부여
-# 각 플랫폼별 네이티브 머신에서 빌드
+# URI Mastodon patch build workflow
+# Build only affected patchsets and publish native images per platform.
 
 variables:
   - &registry 'ghcr.io'
@@ -27,130 +26,201 @@ when:
     branch: main
     path:
       include:
-        - 'versions/**'
+        - '.woodpecker/**'
         - 'manifest.yaml'
+        - 'scripts/**'
+        - 'versions/**'
   - event: tag
     evaluate: 'CI_COMMIT_TAG matches "v[0-9]+\\\\.[0-9]+\\\\.[0-9]+([^+]+)?\\\\+uri[0-9]+\\\\.[0-9]+"'
   - event: manual
     branch: main
 
 steps:
-  # 변경된 버전 감지 및 최신 버전 판단
   - name: detect-versions
     image: alpine:latest
     commands:
       - apk add --no-cache git
-      - scripts/detect-versions.sh "../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
       - |
+        set -eu
+
         ENV_FILE="../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
-        # 이벤트 타입에 따른 태그 접미사 설정
-        if [ "${CI_PIPELINE_EVENT}" = "tag" ]; then
-          echo "IS_RELEASE=true" >> "$ENV_FILE"
-          echo "TAG_SUFFIX=" >> "$ENV_FILE"
-        else
-          echo "IS_RELEASE=false" >> "$ENV_FILE"
-          echo "TAG_SUFFIX=-staging" >> "$ENV_FILE"
+        scripts/detect-versions.sh "$ENV_FILE"
+
+        # The detector writes plain assignments. Read values without sourcing
+        # them so a list containing multiple patchsets remains safe.
+        VERSIONS_TO_BUILD=$(sed -n 's/^VERSIONS_TO_BUILD=//p' "$ENV_FILE" | tail -n 1)
+        LATEST_VERSION=$(sed -n 's/^LATEST_VERSION=//p' "$ENV_FILE" | tail -n 1)
+
+        if [ "${CI_PIPELINE_EVENT}" = "manual" ]; then
+          if [ -z "$LATEST_VERSION" ]; then
+            echo "ERROR: Could not determine the latest patchset."
+            exit 1
+          fi
+          VERSIONS_TO_BUILD="$LATEST_VERSION"
+        elif [ "${CI_PIPELINE_EVENT}" = "push" ]; then
+          CHANGED_FILES=$(git show --name-only --format='' HEAD 2>/dev/null || true)
+          if printf '%s\n' "$CHANGED_FILES" | grep -qE '^(\.woodpecker/|scripts/|manifest\.yaml$)'; then
+            if [ -z "$LATEST_VERSION" ]; then
+              echo "ERROR: Could not determine the latest patchset for global CI changes."
+              exit 1
+            fi
+            case " $VERSIONS_TO_BUILD " in
+              *" $LATEST_VERSION "*) ;;
+              *) VERSIONS_TO_BUILD="${VERSIONS_TO_BUILD:+$VERSIONS_TO_BUILD }$LATEST_VERSION" ;;
+            esac
+          fi
         fi
 
-  # upstream 클론 및 패치 도구 설치
-  - name: setup
-    image: ubuntu:latest
+        if [ "${CI_PIPELINE_EVENT}" = "tag" ]; then
+          TAG_SUFFIX=''
+        else
+          TAG_SUFFIX='-staging'
+        fi
+
+        # Quote values so later steps can safely source multiple patchsets.
+        {
+          printf "VERSIONS_TO_BUILD='%s'\n" "$VERSIONS_TO_BUILD"
+          printf "LATEST_VERSION='%s'\n" "$LATEST_VERSION"
+          printf "TAG_SUFFIX='%s'\n" "$TAG_SUFFIX"
+        } > "${ENV_FILE}.tmp"
+        mv "${ENV_FILE}.tmp" "$ENV_FILE"
+
+        echo "Patchsets to build: ${VERSIONS_TO_BUILD:-none}"
+        echo "Latest patchset: ${LATEST_VERSION:-none}"
+
+  - name: apply-patchsets
+    image: ubuntu:24.04
     commands:
       - |
-        apt update && apt install -y git wget
-        # 플랫폼에 맞는 yq 바이너리 다운로드
-        case "${platform}" in
-          linux/amd64) YQ_ARCH="amd64" ;;
-          linux/arm64) YQ_ARCH="arm64" ;;
-          *) echo "지원하지 않는 플랫폼: ${platform}"; exit 1 ;;
-        esac
-        wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_$YQ_ARCH"
-        chmod +x /usr/local/bin/yq
-        # yq 설치 확인
-        if ! /usr/local/bin/yq --version; then
-          echo "ERROR: yq 설치 실패"
-          exit 1
-        fi
-      - |
+        set -eu
+
         ENV_FILE="../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
         . "$ENV_FILE"
 
         if [ -z "$VERSIONS_TO_BUILD" ]; then
-          echo "빌드할 버전이 없습니다. 스킵합니다."
+          echo "No patchsets to build."
           exit 0
         fi
 
-        # manifest.yaml에서 upstream URL 추출
-        UPSTREAM_URL=$(grep 'upstream:' manifest.yaml | sed 's/upstream:[[:space:]]*//')
-        git clone --depth=1 https://github.com/uri-life/uri.git uri
-        chmod +x uri/bin/uri
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          ca-certificates \
+          curl \
+          git \
+          jq \
+          libstdc++6 \
+          tar
 
-        # upstream 클론 (태그 정보 포함)
-        git clone -q --depth=1 "$UPSTREAM_URL" mastodon
-        cd mastodon
-        git fetch --tags
-        # Git 사용자 정보 설정 (git am에 필요)
-        git config user.name "uri.life CI"
-        git config user.email "ci@uri.life"
-        cd ..
+        case "${platform}" in
+          linux/amd64) URI_ASSET='uri-linux-x86_64.tar.gz' ;;
+          linux/arm64) URI_ASSET='uri-linux-aarch64.tar.gz' ;;
+          *) echo "ERROR: Unsupported platform: ${platform}"; exit 1 ;;
+        esac
 
-        # 각 버전별로 패치 적용 (브랜치 생성됨: uri/vX.Y.Z/uriX.Y)
+        RELEASES=$(curl --fail --silent --show-error --location --retry 3 \
+          --header 'Accept: application/vnd.github+json' \
+          --header 'X-GitHub-Api-Version: 2022-11-28' \
+          'https://api.github.com/repos/uri-life/uri/releases?per_page=100')
+        URI_TAG=$(printf '%s' "$RELEASES" | jq -er '
+          map(select(.draft == false and (.tag_name | test("^v2\\."))))
+          | sort_by(.published_at)
+          | last
+          | .tag_name
+        ')
+        URI_URL=$(printf '%s' "$RELEASES" | jq -er \
+          --arg tag "$URI_TAG" \
+          --arg asset "$URI_ASSET" '
+            map(select(.tag_name == $tag))[0].assets
+            | map(select(.name == $asset))[0].browser_download_url
+          ')
+
+        URI_ARCHIVE=$(mktemp)
+        trap 'rm -f "$URI_ARCHIVE"' EXIT
+        curl --fail --silent --show-error --location --retry 3 \
+          "$URI_URL" \
+          --output "$URI_ARCHIVE"
+        tar -xzf "$URI_ARCHIVE" -C /usr/local/bin uri
+        chmod +x /usr/local/bin/uri
+
+        EXPECTED_URI_VERSION=${URI_TAG#v}
+        ACTUAL_URI_VERSION=$(uri --version)
+        if [ "$ACTUAL_URI_VERSION" != "$EXPECTED_URI_VERSION" ]; then
+          echo "ERROR: URI version mismatch: expected=$EXPECTED_URI_VERSION actual=$ACTUAL_URI_VERSION"
+          exit 1
+        fi
+        echo "URI $ACTUAL_URI_VERSION ($URI_ASSET)"
+
+        UPSTREAM_URL=$(sed -n 's/^upstream:[[:space:]]*//p' manifest.yaml | head -n 1)
+        if [ -z "$UPSTREAM_URL" ]; then
+          echo "ERROR: Could not find the upstream URL in manifest.yaml."
+          exit 1
+        fi
+
+        git clone --quiet --depth=1 --no-tags --no-local "$UPSTREAM_URL" mastodon
+
         for VERSION_COMBO in $VERSIONS_TO_BUILD; do
-          MASTODON_VER=`echo "$VERSION_COMBO" | cut -d: -f1`
-          URI_VER=`echo "$VERSION_COMBO" | cut -d: -f2`
-          uri/bin/uri apply "$MASTODON_VER" "$URI_VER" mastodon
+          MASTODON_VER=${VERSION_COMBO%%:*}
+          URI_VER=${VERSION_COMBO#*:}
+          BRANCH_NAME="uri/$MASTODON_VER/$URI_VER"
+
+          uri --color never apply ./ "$MASTODON_VER" "$URI_VER" mastodon
+
+          CURRENT_BRANCH=$(git -C mastodon branch --show-current)
+          if [ "$CURRENT_BRANCH" != "$BRANCH_NAME" ]; then
+            echo "ERROR: URI result branch mismatch: expected=$BRANCH_NAME actual=$CURRENT_BRANCH"
+            exit 1
+          fi
+          if [ -n "$(git -C mastodon status --porcelain)" ]; then
+            echo "ERROR: The Mastodon worktree is not clean after URI apply."
+            git -C mastodon status --short
+            exit 1
+          fi
         done
 
-  # Docker 이미지 빌드
   - name: build
     image: docker:cli
     commands:
       - |
+        set -eu
+
         ENV_FILE="../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
         . "$ENV_FILE"
 
         if [ -z "$VERSIONS_TO_BUILD" ]; then
-          echo "빌드할 버전이 없습니다. 스킵합니다."
+          echo "No patchsets to build."
           exit 0
         fi
 
-        for VERSION_COMBO in $VERSIONS_TO_BUILD; do
-          MASTODON_VER=`echo "$VERSION_COMBO" | cut -d: -f1`
-          URI_VER=`echo "$VERSION_COMBO" | cut -d: -f2`
+        apk add --no-cache git
 
-          WORK_DIR="mastodon"
+        for VERSION_COMBO in $VERSIONS_TO_BUILD; do
+          MASTODON_VER=${VERSION_COMBO%%:*}
+          URI_VER=${VERSION_COMBO#*:}
           BRANCH_NAME="uri/$MASTODON_VER/$URI_VER"
           IMAGE_NAME="mastodon-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}-$MASTODON_VER-$URI_VER"
           STREAMING_IMAGE_NAME="mastodon-streaming-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}-$MASTODON_VER-$URI_VER"
 
-          VERSION_METADATA="$URI_VER"
+          git -C mastodon checkout --quiet "$BRANCH_NAME"
 
-          cd "$WORK_DIR"
-          git checkout "$BRANCH_NAME"
-
-          # Mastodon 메인 이미지 빌드
           docker build -t "$IMAGE_NAME:latest" \
-            --build-arg MASTODON_VERSION_METADATA="$VERSION_METADATA" \
+            --build-arg MASTODON_VERSION_METADATA="$URI_VER" \
             --build-arg GITHUB_REPOSITORY="${CI_REPO}" \
             --build-arg SOURCE_BASE_URL="https://github.com/${CI_REPO}" \
             --build-arg SOURCE_TAG="$MASTODON_VER+$URI_VER" \
-            .
+            mastodon
 
-          # Streaming 이미지 빌드
           docker build -t "$STREAMING_IMAGE_NAME:latest" \
-            --build-arg MASTODON_VERSION_METADATA="$VERSION_METADATA" \
+            --build-arg MASTODON_VERSION_METADATA="$URI_VER" \
             --build-arg GITHUB_REPOSITORY="${CI_REPO}" \
             --build-arg SOURCE_BASE_URL="https://github.com/${CI_REPO}" \
             --build-arg SOURCE_TAG="$MASTODON_VER+$URI_VER" \
-            -f streaming/Dockerfile \
-            .
-
-          cd -
+            -f mastodon/streaming/Dockerfile \
+            mastodon
         done
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
-  # 이미지 태깅 및 푸시
   - name: push
     image: docker:cli
     environment:
@@ -163,39 +233,45 @@ steps:
         from_secret: GITHUB_TOKEN
     commands:
       - |
+        set -eu
+
         ENV_FILE="../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
         . "$ENV_FILE"
 
         if [ -z "$VERSIONS_TO_BUILD" ]; then
-          echo "빌드할 버전이 없습니다. 스킵합니다."
+          echo "No patchsets to push."
           exit 0
         fi
 
-        # 레지스트리 로그인
-        echo "$GITHUB_TOKEN" | docker login "$IMAGE_REGISTRY" -u "$GITHUB_USERNAME" --password-stdin
+        LOGGED_IN=false
+        logout_registry() {
+          if [ "$LOGGED_IN" = true ]; then
+            docker logout "$IMAGE_REGISTRY" >/dev/null 2>&1 || true
+          fi
+        }
+        trap logout_registry EXIT
 
-        PLATFORM_SHORT="${platform##*/}"
+        echo "$GITHUB_TOKEN" | docker login "$IMAGE_REGISTRY" \
+          --username "$GITHUB_USERNAME" \
+          --password-stdin
+        LOGGED_IN=true
 
+        PLATFORM_SHORT=${platform##*/}
         REGISTRY_IMAGE="$IMAGE_REGISTRY/$IMAGE_ORGANIZATION/$IMAGE_REPOSITORY_BASE"
         REGISTRY_STREAMING="$IMAGE_REGISTRY/$IMAGE_ORGANIZATION/$IMAGE_REPOSITORY_BASE-streaming"
 
         for VERSION_COMBO in $VERSIONS_TO_BUILD; do
-          MASTODON_VER=`echo "$VERSION_COMBO" | cut -d: -f1`
-          URI_VER=`echo "$VERSION_COMBO" | cut -d: -f2`
-
+          MASTODON_VER=${VERSION_COMBO%%:*}
+          URI_VER=${VERSION_COMBO#*:}
           IMAGE_NAME="mastodon-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}-$MASTODON_VER-$URI_VER"
           STREAMING_IMAGE_NAME="mastodon-streaming-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}-$MASTODON_VER-$URI_VER"
-
-          # 플랫폼별 태그: vX.Y.Z-uriX.Y[-staging]-platform
           BASE_TAG="$MASTODON_VER-$URI_VER$TAG_SUFFIX-$PLATFORM_SHORT"
 
-          # 플랫폼별 태그 푸시
           docker image tag "$IMAGE_NAME:latest" "$REGISTRY_IMAGE:$BASE_TAG"
           docker image tag "$STREAMING_IMAGE_NAME:latest" "$REGISTRY_STREAMING:$BASE_TAG"
           docker image push "$REGISTRY_IMAGE:$BASE_TAG"
           docker image push "$REGISTRY_STREAMING:$BASE_TAG"
 
-          # 최신 버전인 경우 플랫폼별 latest 태그 추가
           if [ "$VERSION_COMBO" = "$LATEST_VERSION" ]; then
             LATEST_TAG="latest$TAG_SUFFIX-$PLATFORM_SHORT"
             docker image tag "$IMAGE_NAME:latest" "$REGISTRY_IMAGE:$LATEST_TAG"
@@ -204,35 +280,32 @@ steps:
             docker image push "$REGISTRY_STREAMING:$LATEST_TAG"
           fi
         done
-
-        docker logout "$IMAGE_REGISTRY"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
-  # 정리
   - name: cleanup
     image: docker:cli
     commands:
       - |
-        ENV_FILE="../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
-        . "$ENV_FILE"
+        set -eu
 
-        if [ -z "$VERSIONS_TO_BUILD" ]; then
+        ENV_FILE="../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
+        if [ ! -f "$ENV_FILE" ]; then
           exit 0
         fi
+        VERSIONS_TO_BUILD=$(sed -n "s/^VERSIONS_TO_BUILD=['\"]\{0,1\}\([^'\"]*\)['\"]\{0,1\}$/\1/p" "$ENV_FILE" | tail -n 1)
 
         for VERSION_COMBO in $VERSIONS_TO_BUILD; do
-          MASTODON_VER=`echo "$VERSION_COMBO" | cut -d: -f1`
-          URI_VER=`echo "$VERSION_COMBO" | cut -d: -f2`
-
+          MASTODON_VER=${VERSION_COMBO%%:*}
+          URI_VER=${VERSION_COMBO#*:}
           IMAGE_NAME="mastodon-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}-$MASTODON_VER-$URI_VER"
           STREAMING_IMAGE_NAME="mastodon-streaming-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}-$MASTODON_VER-$URI_VER"
 
-          docker image rm "$IMAGE_NAME:latest" || true
-          docker image rm "$STREAMING_IMAGE_NAME:latest" || true
+          docker image rm "$IMAGE_NAME:latest" >/dev/null 2>&1 || true
+          docker image rm "$STREAMING_IMAGE_NAME:latest" >/dev/null 2>&1 || true
         done
 
-        rm -f "$ENV_FILE"
+        rm -f "$ENV_FILE" "${ENV_FILE}.tmp"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     when:
