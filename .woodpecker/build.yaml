@@ -66,7 +66,7 @@ steps:
             fi
             case " $VERSIONS_TO_BUILD " in
               *" $LATEST_VERSION "*) ;;
-              *) VERSIONS_TO_BUILD="${VERSIONS_TO_BUILD:+$VERSIONS_TO_BUILD }$LATEST_VERSION" ;;
+              *) VERSIONS_TO_BUILD="$${VERSIONS_TO_BUILD:+$VERSIONS_TO_BUILD }$LATEST_VERSION" ;;
             esac
           fi
         fi
@@ -82,11 +82,11 @@ steps:
           printf "VERSIONS_TO_BUILD='%s'\n" "$VERSIONS_TO_BUILD"
           printf "LATEST_VERSION='%s'\n" "$LATEST_VERSION"
           printf "TAG_SUFFIX='%s'\n" "$TAG_SUFFIX"
-        } > "${ENV_FILE}.tmp"
-        mv "${ENV_FILE}.tmp" "$ENV_FILE"
+        } > "$${ENV_FILE}.tmp"
+        mv "$${ENV_FILE}.tmp" "$ENV_FILE"
 
-        echo "Patchsets to build: ${VERSIONS_TO_BUILD:-none}"
-        echo "Latest patchset: ${LATEST_VERSION:-none}"
+        echo "Patchsets to build: $${VERSIONS_TO_BUILD:-none}"
+        echo "Latest patchset: $${LATEST_VERSION:-none}"
 
   - name: apply-patchsets
     image: ubuntu:24.04
@@ -123,7 +123,7 @@ steps:
           --header 'X-GitHub-Api-Version: 2022-11-28' \
           'https://api.github.com/repos/uri-life/uri/releases?per_page=100')
         URI_TAG=$(printf '%s' "$RELEASES" | jq -er '
-          map(select(.draft == false and (.tag_name | test("^v2\\."))))
+          map(select(.draft == false and (.tag_name | test("^v2\\\\."))))
           | sort_by(.published_at)
           | last
           | .tag_name
@@ -143,7 +143,7 @@ steps:
         tar -xzf "$URI_ARCHIVE" -C /usr/local/bin uri
         chmod +x /usr/local/bin/uri
 
-        EXPECTED_URI_VERSION=${URI_TAG#v}
+        EXPECTED_URI_VERSION=$${URI_TAG#v}
         ACTUAL_URI_VERSION=$(uri --version)
         if [ "$ACTUAL_URI_VERSION" != "$EXPECTED_URI_VERSION" ]; then
           echo "ERROR: URI version mismatch: expected=$EXPECTED_URI_VERSION actual=$ACTUAL_URI_VERSION"
@@ -160,8 +160,8 @@ steps:
         git clone --quiet --depth=1 --no-tags --no-local "$UPSTREAM_URL" mastodon
 
         for VERSION_COMBO in $VERSIONS_TO_BUILD; do
-          MASTODON_VER=${VERSION_COMBO%%:*}
-          URI_VER=${VERSION_COMBO#*:}
+          MASTODON_VER=$${VERSION_COMBO%%:*}
+          URI_VER=$${VERSION_COMBO#*:}
           BRANCH_NAME="uri/$MASTODON_VER/$URI_VER"
 
           uri --color never apply ./ "$MASTODON_VER" "$URI_VER" mastodon
@@ -195,8 +195,8 @@ steps:
         apk add --no-cache git
 
         for VERSION_COMBO in $VERSIONS_TO_BUILD; do
-          MASTODON_VER=${VERSION_COMBO%%:*}
-          URI_VER=${VERSION_COMBO#*:}
+          MASTODON_VER=$${VERSION_COMBO%%:*}
+          URI_VER=$${VERSION_COMBO#*:}
           BRANCH_NAME="uri/$MASTODON_VER/$URI_VER"
           IMAGE_NAME="mastodon-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}-$MASTODON_VER-$URI_VER"
           STREAMING_IMAGE_NAME="mastodon-streaming-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}-$MASTODON_VER-$URI_VER"
@@ -256,13 +256,14 @@ steps:
           --password-stdin
         LOGGED_IN=true
 
-        PLATFORM_SHORT=${platform##*/}
+        PLATFORM="${platform}"
+        PLATFORM_SHORT=$${PLATFORM##*/}
         REGISTRY_IMAGE="$IMAGE_REGISTRY/$IMAGE_ORGANIZATION/$IMAGE_REPOSITORY_BASE"
         REGISTRY_STREAMING="$IMAGE_REGISTRY/$IMAGE_ORGANIZATION/$IMAGE_REPOSITORY_BASE-streaming"
 
         for VERSION_COMBO in $VERSIONS_TO_BUILD; do
-          MASTODON_VER=${VERSION_COMBO%%:*}
-          URI_VER=${VERSION_COMBO#*:}
+          MASTODON_VER=$${VERSION_COMBO%%:*}
+          URI_VER=$${VERSION_COMBO#*:}
           IMAGE_NAME="mastodon-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}-$MASTODON_VER-$URI_VER"
           STREAMING_IMAGE_NAME="mastodon-streaming-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}-$MASTODON_VER-$URI_VER"
           BASE_TAG="$MASTODON_VER-$URI_VER$TAG_SUFFIX-$PLATFORM_SHORT"
@@ -293,11 +294,11 @@ steps:
         if [ ! -f "$ENV_FILE" ]; then
           exit 0
         fi
-        VERSIONS_TO_BUILD=$(sed -n "s/^VERSIONS_TO_BUILD=['\"]\{0,1\}\([^'\"]*\)['\"]\{0,1\}$/\1/p" "$ENV_FILE" | tail -n 1)
+        VERSIONS_TO_BUILD=$(sed -n 's/^VERSIONS_TO_BUILD=//p' "$ENV_FILE" | tail -n 1 | tr -d "'")
 
         for VERSION_COMBO in $VERSIONS_TO_BUILD; do
-          MASTODON_VER=${VERSION_COMBO%%:*}
-          URI_VER=${VERSION_COMBO#*:}
+          MASTODON_VER=$${VERSION_COMBO%%:*}
+          URI_VER=$${VERSION_COMBO#*:}
           IMAGE_NAME="mastodon-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}-$MASTODON_VER-$URI_VER"
           STREAMING_IMAGE_NAME="mastodon-streaming-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}-$MASTODON_VER-$URI_VER"
 
@@ -305,7 +306,7 @@ steps:
           docker image rm "$STREAMING_IMAGE_NAME:latest" >/dev/null 2>&1 || true
         done
 
-        rm -f "$ENV_FILE" "${ENV_FILE}.tmp"
+        rm -f "$ENV_FILE" "$${ENV_FILE}.tmp"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     when:

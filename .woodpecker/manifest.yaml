@@ -60,7 +60,7 @@ steps:
             fi
             case " $VERSIONS_TO_BUILD " in
               *" $LATEST_VERSION "*) ;;
-              *) VERSIONS_TO_BUILD="${VERSIONS_TO_BUILD:+$VERSIONS_TO_BUILD }$LATEST_VERSION" ;;
+              *) VERSIONS_TO_BUILD="$${VERSIONS_TO_BUILD:+$VERSIONS_TO_BUILD }$LATEST_VERSION" ;;
             esac
           fi
         fi
@@ -75,11 +75,11 @@ steps:
           printf "VERSIONS_TO_BUILD='%s'\n" "$VERSIONS_TO_BUILD"
           printf "LATEST_VERSION='%s'\n" "$LATEST_VERSION"
           printf "TAG_SUFFIX='%s'\n" "$TAG_SUFFIX"
-        } > "${ENV_FILE}.tmp"
-        mv "${ENV_FILE}.tmp" "$ENV_FILE"
+        } > "$${ENV_FILE}.tmp"
+        mv "$${ENV_FILE}.tmp" "$ENV_FILE"
 
-        echo "Patchsets for manifests: ${VERSIONS_TO_BUILD:-none}"
-        echo "Latest patchset: ${LATEST_VERSION:-none}"
+        echo "Patchsets for manifests: $${VERSIONS_TO_BUILD:-none}"
+        echo "Latest patchset: $${LATEST_VERSION:-none}"
 
   - name: create-manifests
     image: docker:cli
@@ -120,8 +120,8 @@ steps:
         REGISTRY_STREAMING="$IMAGE_REGISTRY/$IMAGE_ORGANIZATION/$IMAGE_REPOSITORY_BASE-streaming"
 
         for VERSION_COMBO in $VERSIONS_TO_BUILD; do
-          MASTODON_VER=${VERSION_COMBO%%:*}
-          URI_VER=${VERSION_COMBO#*:}
+          MASTODON_VER=$${VERSION_COMBO%%:*}
+          URI_VER=$${VERSION_COMBO#*:}
           MULTI_TAG="$MASTODON_VER-$URI_VER$TAG_SUFFIX"
           AMD64_TAG="$MULTI_TAG-amd64"
           ARM64_TAG="$MULTI_TAG-arm64"
@@ -159,6 +159,6 @@ steps:
       - |
         set -eu
         ENV_FILE="../.ci-${CI_PIPELINE_PARENT}-${CI_PIPELINE_NUMBER}.env"
-        rm -f "$ENV_FILE" "${ENV_FILE}.tmp"
+        rm -f "$ENV_FILE" "$${ENV_FILE}.tmp"
     when:
       - status: [success, failure]
