@@ -1,0 +1,15 @@
+inherits: v4.5.17+uri3.3
+
+features:
+  enable-heif:
+    name: enable-heif
+    description: |
+      임시로 비활성화된 HEIF 지원을 활성화합니다.
+    dependencies:
+      - libheif
+  libheif:
+    name: libheif
+    description: |
+      libheif 1.23.5를 직접 빌드하여 보안 취약점을 해결합니다.
+    dev-dependencies:
+      - devcontainer
